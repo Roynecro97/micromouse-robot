@@ -1,0 +1,8 @@
+[submodule "components/SparkFun_VL53L1X_Arduino_Library"]
+	path = components/SparkFun_VL53L1X_Arduino_Library
+	url = https://github.com/OmerHuly/SparkFun_VL53L1X_Arduino_Library.git
+	branch = esp-idf-main
+[submodule "components/SparkFun_I2C_Mux_Arduino_Library"]
+	path = components/SparkFun_I2C_Mux_Arduino_Library
+	url = https://github.com/OmerHuly/SparkFun_I2C_Mux_Arduino_Library.git
+	branch = esp-idf-main
