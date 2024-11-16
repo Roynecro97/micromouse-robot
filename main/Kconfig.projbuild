@@ -33,4 +33,17 @@ menu "Micromouse Configuration"
         help
             Define the blinking period in milliseconds.
 
+    config BLINK_PATTERN_MORSE
+        bool "Blink in Morse code"
+        default false
+        help
+            Define the blinking pattern.
+
+    config BLINK_PATTERN_MORSE_TEXT
+        depends on BLINK_PATTERN_MORSE
+        string "Blink in Morse code"
+        default "SOS"
+        help
+            Define the blinking pattern.
+
 endmenu
