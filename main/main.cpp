@@ -6,13 +6,14 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "led_strip.h"
 #include "sdkconfig.h"
+
+#include <stdio.h>
 
 static const char *TAG = "example";
 
@@ -30,12 +31,15 @@ static led_strip_handle_t led_strip;
 static void blink_led(void)
 {
     /* If the addressable LED is enabled */
-    if (s_led_state) {
+    if (s_led_state)
+    {
         /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
         led_strip_set_pixel(led_strip, 0, 16, 16, 16);
         /* Refresh the strip to send data */
         led_strip_refresh(led_strip);
-    } else {
+    }
+    else
+    {
         /* Set all LED off to clear all pixels */
         led_strip_clear(led_strip);
     }
@@ -47,10 +51,10 @@ static void configure_led(void)
     /* LED strip initialization with the GPIO and pixels number*/
     led_strip_config_t strip_config = {
         .strip_gpio_num = blink_gpio,
-        .max_leds = 1, // at least one LED on board
+        .max_leds = 1,  // at least one LED on board
     };
     led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
+        .resolution_hz = 10 * 1'000 * 1'000,  // 10MHz
     };
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
     /* Set all LED off to clear all pixels */
@@ -75,18 +79,17 @@ static void configure_led(void)
 
 #endif
 
-
 #if CONFIG_BLINK_PATTERN_MORSE
 
 inline constexpr char text[] = CONFIG_BLINK_PATTERN_MORSE_TEXT;
 
 enum class MorseElement
 {
-    Dot,       // dot/dit - '1'
-    Dash,      // dash/dah - '111'
-    MarkSep,   // intra-character gap (between dits and dahs within a character) - '0'
-    LetterSep, // gap between characters - '000'
-    WordSep,   // gap between words - '0000000'
+    Dot,        // dot/dit - '1'
+    Dash,       // dash/dah - '111'
+    MarkSep,    // intra-character gap (between dits and dahs within a character) - '0'
+    LetterSep,  // gap between characters - '000'
+    WordSep,    // gap between words - '0000000'
 };
 
 constexpr size_t ticks(MorseElement m) noexcept
@@ -152,8 +155,10 @@ struct MorseSymbol
 
     constexpr MorseSymbol() noexcept = default;
 
-    template <size_t N> requires (N <= max_elements)
-    constexpr MorseSymbol(const MorseElement (&elems)[N]) noexcept : elements{}, used_elements(N)
+    template <size_t N>
+        requires (N <= max_elements)
+    constexpr MorseSymbol(const MorseElement (&elems)[N]) noexcept : elements{}
+                                                                   , used_elements(N)
     {
         for (auto i = 0ZU; i < N; ++i)
         {
@@ -161,7 +166,8 @@ struct MorseSymbol
         }
     }
 
-    template <size_t N> requires (N * 2 <= max_elements)
+    template <size_t N>
+        requires (N * 2 <= max_elements)
     static constexpr MorseSymbol from_elements(const MorseElement (&elems)[N], bool word_end = false) noexcept
     {
         MorseElement expanded[N * 2];
@@ -177,6 +183,7 @@ struct MorseSymbol
 
     static constexpr MorseSymbol from_char(char c, bool word_end = false) noexcept
     {
+        // clang-format off
         switch (c)
         {
         case 'a':
@@ -370,6 +377,7 @@ struct MorseSymbol
         default:
             return {{MorseElement::MarkSep}};  // PH error
         }
+        // clang-format on
     }
 };
 
@@ -413,20 +421,19 @@ void morse_loop()
             pos = text;
         }
     }
-
 }
 #endif
 
 extern "C" void app_main(void)
 {
-
     /* Configure the peripheral according to the LED type */
     configure_led();
 
 #if CONFIG_BLINK_PATTERN_MORSE
     morse_loop();
 #else
-    while (1) {
+    while (true)
+    {
         ESP_LOGI(TAG, "Turning the LED %s!", s_led_state ? "ON" : "OFF");
         blink_led();
         /* Toggle the LED state */
