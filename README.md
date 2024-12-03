@@ -6,7 +6,28 @@ Robot for Micromouse.
 
 ### Setting Up ESP-IDF
 
-TODO: Add installation & configuration
+1. Install ESP-IDF 5.1.4 using the VSCode extension or by following the
+   [guide][install guide].
+2. Install `idf-requirements.txt` in the ESP-IDF python virtualenv.
+
+   For example, if you're using Python 3.12 and a POSIX environment with bash:
+
+   ```sh
+   source ~/.espressif/python_env/idf5.1_py3.12_env/bin/activate
+   pip install -r idf-requirements.txt
+   ```
+
+   Or in a single command:
+
+   ```sh
+   ~/.espressif/python_env/idf5.1_py3.12_env/bin/pip install -r idf-requirements.txt
+   ```
+
+   This step is required to make sure the ESP-IDF dependencies are using the
+   correct versions because the ESP-IDF installation allows for API breaking
+   updates.
+
+[install guide]: https://docs.espressif.com/projects/esp-idf/en/v5.1.4/esp32/get-started/index.html#installation
 
 ### Configuring the Project
 
@@ -26,7 +47,7 @@ See more keyboard shortcuts [here][monitor shortcuts].
 
 `idf.py flash monitor` performs build+flash+monitor.
 
-[monitor shortcuts]: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/tools/idf-monitor.html#keyboard-shortcuts
+[monitor shortcuts]: https://docs.espressif.com/projects/esp-idf/en/v5.1.4/esp32/api-guides/tools/idf-monitor.html#keyboard-shortcuts
 
 ## Running the Tests
 
