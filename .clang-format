@@ -137,15 +137,21 @@ IfMacros:
 IncludeBlocks: Regroup #Preserve
 IncludeCategories:
   - Regex: '^(<|")(gtest|gmock|isl|json)/'
-    Priority: 3
-  - Regex: "<(sys/)?[[:alnum:]._]+>"
     Priority: 4
+  - Regex: "<(sys/|std)[[:alnum:]._]+>"
+    Priority: 5
+  - Regex: "<(assert|complex|w?ctype|errno|fenv|float|inttypes|iso646|limits|locale|(tg)?math|setjmp|signal|string|threads|time|[uw]char)\\.h>"
+    Priority: 5
+  - Regex: "<[[:alnum:]_]+>"
+    Priority: 5
   - Regex: '(<|")maze_solver/'
     Priority: 1
     CaseSensitive: true
   - Regex: '(<|")sdkconfig.h'
     Priority: 2
     SortPriority: 3
+  - Regex: '<.*>'
+    Priority: 3
   - Regex: '.*'
     Priority: 2
 IncludeIsMainRegex: '(_test|Test|UT)?$'
