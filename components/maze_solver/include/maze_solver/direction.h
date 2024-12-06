@@ -1,8 +1,9 @@
 #ifndef MAZE_SOLVER_DIRECTION_H
 #define MAZE_SOLVER_DIRECTION_H
 
+#include <misc_utils/typing_utils.h>
+
 #include <array>
-#include <concepts>
 #include <limits>
 #include <numbers>
 
@@ -187,21 +188,22 @@ constexpr auto to_degrees(Direction d) noexcept
  * @param d A cardinal direction.
  * @return Clockwise-rotation angle (in radians) from the East direction.
  */
-template <std::floating_point F = float>
+template <ExtendedFloatingPoint F = float>
 constexpr auto to_radians(Direction d) noexcept
 {
+    using float_type = make_floating_point<F>;
     switch (d)
     {
     case Direction::North:
-        return -std::numbers::pi_v<F> / 2;
+        return F(-std::numbers::pi_v<float_type> / 2);
     case Direction::East:
         return F(0.0f);
     case Direction::South:
-        return std::numbers::pi_v<F> / 2;
+        return F(std::numbers::pi_v<float_type> / 2);
     case Direction::West:
-        return -std::numbers::pi_v<F>;
+        return F(-std::numbers::pi_v<float_type>);
     default:
-        return std::numeric_limits<F>::quiet_NaN();
+        return F(std::numeric_limits<float_type>::quiet_NaN());
     }
 }
 
