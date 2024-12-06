@@ -186,17 +186,7 @@ struct ConstrainedValue<ValueRange<T, Low, High, M, Epsilon>, Cyclic>
     }
     friend constexpr auto operator-(const ConstrainedValue &lhs, const ConstrainedValue &rhs) noexcept
     {
-        if constexpr (cyclic)
-        {
-            using std::abs;
-            const auto a = lhs.get() - rhs.get();
-            const auto b = (lhs > rhs) ? (a - range_type::cycle) : (a + range_type::cycle);
-            return ConstrainedValue((abs(a) <= abs(b)) ? a : b);
-        }
-        else
-        {
-            return ConstrainedValue(lhs.value - rhs.value);
-        }
+        return ConstrainedValue(lhs.value - rhs.value);
     }
     friend constexpr auto operator*(const ConstrainedValue &lhs, const ConstrainedValue &rhs) noexcept
     {
