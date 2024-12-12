@@ -125,16 +125,24 @@ struct unsafe_tag
 } inline constexpr unsafe;
 
 template <typename ValueRange, bool Cyclic = true>
-struct ConstrainedValue;
+class ConstrainedValue;
 
 template <PartialArithmetic T, T Low, T High, Mode M, T Epsilon, bool Cyclic>
-struct ConstrainedValue<ValueRange<T, Low, High, M, Epsilon>, Cyclic>
+class ConstrainedValue<ValueRange<T, Low, High, M, Epsilon>, Cyclic>
 {
+public:
     using range_type = ValueRange<T, Low, High, M, Epsilon>;
     using type = typename range_type::type;
     static constexpr auto cyclic = Cyclic;
 
-    constexpr ConstrainedValue() noexcept = default;
+    constexpr ConstrainedValue() noexcept
+        requires (range_type::contains(type{}))
+    = default;
+    constexpr ConstrainedValue() noexcept
+        requires (!range_type::contains(type{}))
+        : ConstrainedValue(type{})
+    {
+    }
     explicit constexpr ConstrainedValue(type val) noexcept : value(fix_value(val)) {}
     explicit constexpr ConstrainedValue(unsafe_tag, type val) noexcept : value(val) {}
 
@@ -210,7 +218,7 @@ struct ConstrainedValue<ValueRange<T, Low, High, M, Epsilon>, Cyclic>
     }
 
     constexpr type get() const noexcept { return value; }
-    explicit constexpr operator type() const noexcept { return get(); }
+    constexpr operator type() const noexcept { return get(); }
 
     static constexpr type fix_value(type value) noexcept
         requires (cyclic)
@@ -222,6 +230,8 @@ struct ConstrainedValue<ValueRange<T, Low, High, M, Epsilon>, Cyclic>
     {
         return range_type::clamp(value);
     }
+
+private:
     constexpr void fix() noexcept { value = fix_value(value); }
 
     type value;
