@@ -57,38 +57,41 @@ public:
 
     static constexpr type clamp(type val) noexcept { return clamp_high(clamp_low(val)); }
 
+    static constexpr bool contains(type val) noexcept { return !out_of_range_low(val) && !out_of_range_high(val); }
+
 private:
-    static constexpr type fix_low(type val) noexcept
+    static constexpr bool out_of_range_low(type val) noexcept
         requires (is_left_open)
     {
-        while (val <= infimum + epsilon)
-        {
-            val += cycle;
-        }
-        return val;
+        return val <= infimum + epsilon;
     }
-    static constexpr type fix_low(type val) noexcept
+    static constexpr bool out_of_range_low(type val) noexcept
         requires (!is_left_open)
     {
-        while (val < minimum - epsilon)
+        return val < minimum - epsilon;
+    }
+    static constexpr bool out_of_range_high(type val) noexcept
+        requires (is_right_open)
+    {
+        return val >= supremum - epsilon;
+    }
+    static constexpr bool out_of_range_high(type val) noexcept
+        requires (!is_right_open)
+    {
+        return val > maximum + epsilon;
+    }
+
+    static constexpr type fix_low(type val) noexcept
+    {
+        while (out_of_range_low(val))
         {
             val += cycle;
         }
         return val;
     }
     static constexpr type fix_high(type val) noexcept
-        requires (is_right_open)
     {
-        while (val >= supremum - epsilon)
-        {
-            val -= cycle;
-        }
-        return val;
-    }
-    static constexpr type fix_high(type val) noexcept
-        requires (!is_right_open)
-    {
-        while (val > maximum + epsilon)
+        while (out_of_range_high(val))
         {
             val -= cycle;
         }
@@ -98,38 +101,22 @@ private:
     static constexpr type clamp_low(type val) noexcept
         requires (is_left_open)
     {
-        if (val <= infimum + epsilon)
-        {
-            return infimum + clamp_epsilon;
-        }
-        return val;
+        return out_of_range_low(val) ? infimum + clamp_epsilon : val;
     }
     static constexpr type clamp_low(type val) noexcept
         requires (!is_left_open)
     {
-        if (val < minimum - epsilon)
-        {
-            return minimum;
-        }
-        return val;
+        return out_of_range_low(val) ? minimum : val;
     }
     static constexpr type clamp_high(type val) noexcept
         requires (is_right_open)
     {
-        if (val >= supremum - epsilon)
-        {
-            return supremum - clamp_epsilon;
-        }
-        return val;
+        return out_of_range_high(val) ? supremum - clamp_epsilon : val;
     }
     static constexpr type clamp_high(type val) noexcept
         requires (!is_right_open)
     {
-        if (val > maximum + epsilon)
-        {
-            return maximum;
-        }
-        return val;
+        return out_of_range_high(val) ? maximum : val;
     }
 };
 
