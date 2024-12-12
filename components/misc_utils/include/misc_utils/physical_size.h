@@ -1,0 +1,366 @@
+#ifndef MISC_UTILS_PHYSICAL_SIZE_H
+#define MISC_UTILS_PHYSICAL_SIZE_H
+
+#include "bits/physical_unit.h"
+#include "bits/unit.h"
+#include "bits/unit_list.h"
+#include "typing_utils.h"
+#include "value_range.h"
+
+#include <chrono>
+#include <concepts>
+#include <cstdint>
+#include <limits>
+#include <ratio>
+#include <type_traits>
+
+namespace micromouse
+{
+
+template <typename T>
+struct is_ratio : std::false_type
+{};
+
+template <std::intmax_t Num, std::intmax_t Denom>
+struct is_ratio<std::ratio<Num, Denom>> : std::true_type
+{};
+
+template <typename T>
+inline constexpr auto is_ratio_v = is_ratio<T>::value;
+
+template <typename T>
+concept RatioSpec = is_ratio_v<T>;
+
+template <ExtendedArithmetic Rep>
+struct PhysicalSizeValues
+{
+    static constexpr Rep zero() noexcept { return Rep(0); }
+    static constexpr Rep one() noexcept { return Rep(1); }
+};
+
+template <Arithmetic Rep>
+struct PhysicalSizeValues<Rep>
+{
+    static constexpr Rep zero() noexcept { return Rep(0); }
+    static constexpr Rep one() noexcept { return Rep(1); }
+    static constexpr Rep min() noexcept { return std::numeric_limits<Rep>::lowest(); }
+    static constexpr Rep max() noexcept { return std::numeric_limits<Rep>::max(); }
+};
+
+template <ArithmeticWrapper Rep>
+struct PhysicalSizeValues<Rep> : PhysicalSizeValues<typename Rep::type>
+{};
+
+template <PartialArithmetic Rep, Rep Low, Rep High, Mode M, Rep Epsilon, bool Cyclic>
+struct PhysicalSizeValues<ConstrainedValue<ValueRange<Rep, Low, High, M, Epsilon>, Cyclic>>
+{
+    static constexpr auto zero() noexcept
+    {
+        return ConstrainedValue<ValueRange<Rep, Low, High, M, Epsilon>, Cyclic>(0);
+    }
+    static constexpr auto one() noexcept { return ConstrainedValue<ValueRange<Rep, Low, High, M, Epsilon>, Cyclic>(1); }
+    static constexpr auto min() noexcept
+    {
+        return ConstrainedValue<ValueRange<Rep, Low, High, M, Epsilon>, Cyclic>(
+            ValueRange<Rep, Low, High, M, Epsilon>::clamp(Low)
+        );
+    }
+    static constexpr auto max() noexcept
+    {
+        return ConstrainedValue<ValueRange<Rep, Low, High, M, Epsilon>, Cyclic>(
+            ValueRange<Rep, Low, High, M, Epsilon>::clamp(High)
+        );
+    }
+};
+
+template <PartialArithmetic Rep, UnitSpec Units = make_units<>, RatioSpec Ratio = std::ratio<1>>
+class PhysicalSize
+{
+public:
+    using rep = Rep;
+    using ratio = Ratio;
+    using units = Units;
+
+    constexpr PhysicalSize() noexcept = default;
+    explicit(!units_equal_v<Units, make_units<>>) constexpr PhysicalSize(rep val) noexcept : value(val) {}
+    template <typename... Args>
+    explicit constexpr PhysicalSize(Args &&...args) noexcept : value(std::forward<Args>(args)...)
+    {
+    }
+    template <std::convertible_to<Rep> RepU, SameUnitAs<Units> UnitsU>
+        requires (!std::is_same_v<Units, UnitsU>)
+    constexpr PhysicalSize(PhysicalSize<RepU, UnitsU, Ratio> other) noexcept : value(other.count())
+    {
+    }
+    template <std::convertible_to<Rep> RepU>
+        requires (units_equal_v<Units, make_units<Time>>)
+    constexpr PhysicalSize(std::chrono::duration<RepU, Ratio> dur) noexcept : value(dur.count())
+    {
+    }
+
+    friend constexpr auto operator<=>(const PhysicalSize &lhs, const PhysicalSize &rhs) noexcept = default;
+    template <std::totally_ordered_with<Rep> RepU, SameUnitAs<Units> UnitsU>
+    friend constexpr auto operator<=>(const PhysicalSize &lhs, const PhysicalSize<RepU, UnitsU, Ratio> &rhs) noexcept
+    {
+        return lhs.count() <=> rhs.count();
+    }
+
+    constexpr auto operator+() const noexcept { return PhysicalSize(+value); }
+    constexpr auto &operator++() noexcept
+    {
+        ++value;
+        return *this;
+    }
+    constexpr auto operator++(int) noexcept
+    {
+        auto old = PhysicalSize(value++);
+        return old;
+    }
+    constexpr auto operator-() const noexcept { return PhysicalSize(-value); }
+    constexpr auto &operator--() noexcept
+    {
+        --value;
+        return *this;
+    }
+    constexpr auto operator--(int) noexcept
+    {
+        auto old = PhysicalSize(value--);
+        return old;
+    }
+    friend constexpr auto operator+(const PhysicalSize &lhs, const PhysicalSize &rhs) noexcept
+    {
+        return PhysicalSize(lhs.count() + rhs.count());
+    }
+    friend constexpr auto operator-(const PhysicalSize &lhs, const PhysicalSize &rhs) noexcept
+    {
+        return PhysicalSize(lhs.count() - rhs.count());
+    }
+
+    constexpr auto &operator+=(const PhysicalSize &other) noexcept
+    {
+        value += other.value;
+        return *this;
+    }
+    constexpr auto &operator-=(const PhysicalSize &other) noexcept
+    {
+        value -= other.value;
+        return *this;
+    }
+    template <std::convertible_to<Rep> T>
+        requires requires (Rep a, T b) {
+            { a *= b };
+        }
+    constexpr auto &operator*=(const T &other) noexcept(noexcept(std::declval<Rep &>() *= other))
+    {
+        value *= other;
+        return *this;
+    }
+    template <std::convertible_to<Rep> T>
+        requires requires (Rep a, T b) {
+            { a /= b };
+        }
+    constexpr auto &operator/=(const T &other) noexcept(noexcept(std::declval<Rep &>() /= other))
+    {
+        value /= other;
+        return *this;
+    }
+
+    template <UnitSpec UnitsU, RatioSpec RatioU>
+    friend constexpr auto operator*(const PhysicalSize &lhs, const PhysicalSize<Rep, UnitsU, RatioU> &rhs) noexcept
+    {
+        return PhysicalSize<Rep, unit_mul<Units, UnitsU>, std::ratio_multiply<Ratio, RatioU>>(
+            lhs.count() * rhs.count()
+        );
+    }
+    template <UnitSpec UnitsU, RatioSpec RatioU>
+    friend constexpr auto operator/(const PhysicalSize &lhs, const PhysicalSize<Rep, UnitsU, RatioU> &rhs) noexcept
+    {
+        return PhysicalSize<Rep, unit_div<Units, UnitsU>, std::ratio_divide<Ratio, RatioU>>(lhs.count() / rhs.count());
+    }
+
+    template <PartialArithmetic RepU, RatioSpec RatioU>
+        requires (requires (Rep a, RepU b) {
+            { a * b } -> std::convertible_to<Rep>;
+        })
+    friend constexpr auto operator*(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
+        noexcept(noexcept(std::declval<Rep>() * std::declval<RepU>()))
+    {
+        return PhysicalSize<Rep, unit_mul<Units, make_units<Time>>, std::ratio_multiply<Ratio, RatioU>>(
+            lhs.count() * rhs.count()
+        );
+    }
+    template <PartialArithmetic RepU, RatioSpec RatioU>
+        requires (requires (Rep a, RepU b) {
+            { a / b } -> std::convertible_to<Rep>;
+        })
+    friend constexpr auto operator/(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
+        noexcept(noexcept(std::declval<Rep>() * std::declval<RepU>()))
+    {
+        return PhysicalSize<Rep, unit_div<Units, make_units<Time>>, std::ratio_divide<Ratio, RatioU>>(
+            lhs.count() / rhs.count()
+        );
+    }
+
+    template <std::convertible_to<Rep> T>
+        requires requires (Rep a, T b) {
+            { a * b } -> std::convertible_to<Rep>;
+        }
+    friend constexpr auto operator*(const PhysicalSize &lhs, const T &rhs) noexcept(noexcept(lhs.count() * rhs))
+    {
+        return PhysicalSize(lhs.count() * rhs);
+    }
+    template <std::convertible_to<Rep> T>
+        requires requires (Rep a, T b) {
+            { a / b } -> std::convertible_to<Rep>;
+        }
+    friend constexpr auto operator/(const PhysicalSize &lhs, const T &rhs) noexcept(noexcept(lhs.count() / rhs))
+    {
+        return PhysicalSize(lhs.count() / rhs);
+    }
+
+    template <std::convertible_to<Rep> T>
+        requires requires (T a, Rep b) {
+            { a * b } -> std::convertible_to<Rep>;
+        }
+    friend constexpr auto operator*(const T &lhs, const PhysicalSize &rhs) noexcept(noexcept(lhs * rhs.count()))
+    {
+        return PhysicalSize(lhs * rhs.count());
+    }
+    template <std::convertible_to<Rep> T>
+        requires requires (T a, Rep b) {
+            { a / b } -> std::convertible_to<Rep>;
+        }
+    friend constexpr auto operator/(const T &lhs, const PhysicalSize &rhs) noexcept(noexcept(lhs / rhs.count()))
+    {
+        return PhysicalSize<Rep, unit_div<make_units<>, Units>, std::ratio_divide<std::ratio<1>, Ratio>>(
+            lhs / rhs.count()
+        );
+    }
+
+    constexpr rep count() const noexcept { return value; }
+    static constexpr auto zero() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::zero()); }
+    static constexpr auto one() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::one()); }
+    static constexpr auto min() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::min()); }
+    static constexpr auto max() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::max()); }
+
+    constexpr std::chrono::duration<Rep, Ratio> to_duration() noexcept
+        requires (units_equal_v<Units, make_units<Time>>)
+    {
+        return std::chrono::duration<Rep, Ratio>(count());
+    }
+
+    static consteval const char *units_str() { return ""; }
+
+private:
+    rep value{};
+};
+
+template <typename>
+struct is_physical_size : std::false_type
+{};
+
+template <PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
+struct is_physical_size<PhysicalSize<Rep, Units, Ratio>> : std::true_type
+{};
+
+template <typename T>
+inline constexpr auto is_physical_size_v = is_physical_size<T>::value;
+
+template <typename T>
+concept PhysicalSizeType = is_physical_size_v<T>;
+
+template <PhysicalSizeType ToSize, PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
+    requires (units_equal_v<typename ToSize::units, Units>)
+constexpr ToSize unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
+{
+    using ToRep = ToSize::rep;
+    using ToRatio = ToSize::ratio;
+    using CF = std::ratio_divide<Ratio, ToRatio>;
+    using CR = std::common_type_t<Rep, ToRep, std::intmax_t>;
+    const auto cr_count = static_cast<CR>(ps.count());
+    const auto cr_num = static_cast<CR>(CF::num);
+    const auto cr_den = static_cast<CR>(CF::den);
+    if constexpr (CF::num == 1)
+    {
+        if constexpr (CF::den == 1)
+        {
+            return ToSize(static_cast<ToRep>(ps.count()));
+        }
+        else
+        {
+            return ToSize(static_cast<ToRep>(cr_count / cr_den));
+        }
+    }
+    else
+    {
+        if constexpr (CF::den == 1)
+        {
+            return ToSize(static_cast<ToRep>(cr_count * cr_num));
+        }
+        else
+        {
+            return ToSize(static_cast<ToRep>(cr_count * cr_num / cr_den));
+        }
+    }
+}
+
+template <RatioSpec ToRatio, PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
+constexpr auto unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
+{
+    return unit_cast<PhysicalSize<Rep, Units, ToRatio>>(ps);
+}
+
+template <PartialArithmetic ToRep, PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
+constexpr auto unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
+{
+    return unit_cast<PhysicalSize<ToRep, Units, Ratio>>(ps);
+}
+
+template <PartialArithmetic ToRep, RatioSpec ToRatio, PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
+constexpr auto unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
+{
+    return unit_cast<PhysicalSize<ToRep, Units, ToRatio>>(ps);
+}
+
+using meters = PhysicalSize<float, make_units<Distance>>;
+using centimeters = PhysicalSize<float, make_units<Distance>, std::centi>;
+using millimeters = PhysicalSize<float, make_units<Distance>, std::milli>;
+
+inline namespace unit_literals
+{
+
+consteval meters operator""_m(long double val)
+{
+    return meters(val);
+}
+
+consteval meters operator""_m(unsigned long long val)
+{
+    return meters(val);
+}
+
+consteval centimeters operator""_cm(long double val)
+{
+    return centimeters(val);
+}
+
+consteval centimeters operator""_cm(unsigned long long val)
+{
+    return centimeters(val);
+}
+
+consteval millimeters operator""_mm(long double val)
+{
+    return millimeters(val);
+}
+
+consteval millimeters operator""_mm(unsigned long long val)
+{
+    return millimeters(val);
+}
+
+}  // namespace unit_literals
+
+}  // namespace micromouse
+
+#endif  // MISC_UTILS_PHYSICAL_SIZE_H
