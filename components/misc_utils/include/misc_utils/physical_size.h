@@ -191,9 +191,7 @@ public:
     friend constexpr auto operator*(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
         noexcept(noexcept(std::declval<rep>() * std::declval<RepU>()))
     {
-        return PhysicalSize<rep, unit_mul<units, make_units<Time>>, std::ratio_multiply<ratio, RatioU>>(
-            lhs.count() * rhs.count()
-        );
+        return PhysicalSize<rep, unit_mul<units, Time>, std::ratio_multiply<ratio, RatioU>>(lhs.count() * rhs.count());
     }
     template <PartialArithmetic RepU, RatioSpec RatioU>
         requires (requires (rep a, RepU b) {
@@ -202,9 +200,7 @@ public:
     friend constexpr auto operator/(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
         noexcept(noexcept(std::declval<rep>() / std::declval<RepU>()))
     {
-        return PhysicalSize<rep, unit_div<units, make_units<Time>>, std::ratio_divide<ratio, RatioU>>(
-            lhs.count() / rhs.count()
-        );
+        return PhysicalSize<rep, unit_div<units, Time>, std::ratio_divide<ratio, RatioU>>(lhs.count() / rhs.count());
     }
 
     template <PartialArithmetic RepU, RatioSpec RatioU>
