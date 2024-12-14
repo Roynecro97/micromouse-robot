@@ -8,19 +8,18 @@
 namespace micromouse
 {
 
-template <TString SI, TString Shorthand, typename Tag = decltype([] {})>
+template <char Shorthand>
 struct PhysicalUnit
 {
-    static constexpr const char *si_name = SI;
-    static constexpr const char *si_unit = Shorthand;
+    static constexpr char unit = Shorthand;
 };
 
 template <typename>
 struct is_physical_unit : std::false_type
 {};
 
-template <TString SI, TString Shorthand, typename Tag>
-struct is_physical_unit<PhysicalUnit<SI, Shorthand, Tag>> : std::true_type
+template <char Shorthand>
+struct is_physical_unit<PhysicalUnit<Shorthand>> : std::true_type
 {};
 
 template <typename T>
@@ -29,8 +28,8 @@ inline constexpr auto is_physical_unit_v = is_physical_unit<T>::value;
 template <typename T>
 concept PhysicalUnitType = is_physical_unit_v<T>;
 
-using Distance = PhysicalUnit<"meter", "m">;
-using Time = PhysicalUnit<"second", "s">;
+using Distance = PhysicalUnit<'m'>;
+using Time = PhysicalUnit<'s'>;
 
 }  // namespace micromouse
 

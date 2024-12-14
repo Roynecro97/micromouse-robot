@@ -361,42 +361,42 @@ using meters_per_second = PhysicalSize<float, unit_div<Distance, Time>>;
 inline namespace unit_literals
 {
 
-consteval meters operator""_m(long double val)
+consteval auto operator""_m(long double val)
 {
     return meters(val);
 }
 
-consteval meters operator""_m(unsigned long long val)
+consteval auto operator""_m(unsigned long long val)
 {
     return meters(val);
 }
 
-consteval centimeters operator""_cm(long double val)
+consteval auto operator""_cm(long double val)
 {
     return centimeters(val);
 }
 
-consteval centimeters operator""_cm(unsigned long long val)
+consteval auto operator""_cm(unsigned long long val)
 {
     return centimeters(val);
 }
 
-consteval millimeters operator""_mm(long double val)
+consteval auto operator""_mm(long double val)
 {
     return millimeters(val);
 }
 
-consteval millimeters operator""_mm(unsigned long long val)
+consteval auto operator""_mm(unsigned long long val)
 {
     return millimeters(val);
 }
 
-consteval meters_per_second operator""_mps(long double val)
+consteval auto operator""_mps(long double val)
 {
     return meters_per_second(val);
 }
 
-consteval meters_per_second operator""_mps(unsigned long long val)
+consteval auto operator""_mps(unsigned long long val)
 {
     return meters_per_second(val);
 }
