@@ -31,10 +31,16 @@ inline constexpr auto is_unit_v = is_unit<T>::value;
 template <typename T>
 concept UnitSpec = is_unit_v<T>;
 
+template <PhysicalUnitType... Units>
+using make_units = Unit<UnitList<Units...>>;
+
 namespace detail
 {
 
-template <UnitSpec, UnitSpec>
+template <typename T>
+concept UnitSpecOrSingle = UnitSpec<T> || PhysicalUnitType<T>;
+
+template <UnitSpecOrSingle, UnitSpecOrSingle>
 struct unit_mul_helper;
 
 template <
@@ -51,7 +57,19 @@ struct unit_mul_helper<Unit<LhsNumerator, LhsDenominator>, Unit<RhsNumerator, Rh
     using type = Unit<numerator, denominator>;
 };
 
-template <UnitSpec, UnitSpec>
+template <PhysicalUnitType Lhs, PhysicalUnitType Rhs>
+struct unit_mul_helper<Lhs, Rhs> : unit_mul_helper<make_units<Lhs>, make_units<Rhs>>
+{};
+
+template <PhysicalUnitType Lhs, UnitSpec Rhs>
+struct unit_mul_helper<Lhs, Rhs> : unit_mul_helper<make_units<Lhs>, Rhs>
+{};
+
+template <UnitSpec Lhs, PhysicalUnitType Rhs>
+struct unit_mul_helper<Lhs, Rhs> : unit_mul_helper<Lhs, make_units<Rhs>>
+{};
+
+template <UnitSpecOrSingle, UnitSpecOrSingle>
 struct unit_div_helper;
 
 template <
@@ -63,12 +81,24 @@ struct unit_div_helper<Unit<LhsNumerator, LhsDenominator>, Unit<RhsNumerator, Rh
     : unit_mul_helper<Unit<LhsNumerator, LhsDenominator>, Unit<RhsDenominator, RhsNumerator>>
 {};
 
+template <PhysicalUnitType Lhs, PhysicalUnitType Rhs>
+struct unit_div_helper<Lhs, Rhs> : unit_div_helper<make_units<Lhs>, make_units<Rhs>>
+{};
+
+template <PhysicalUnitType Lhs, UnitSpec Rhs>
+struct unit_div_helper<Lhs, Rhs> : unit_div_helper<make_units<Lhs>, Rhs>
+{};
+
+template <UnitSpec Lhs, PhysicalUnitType Rhs>
+struct unit_div_helper<Lhs, Rhs> : unit_div_helper<Lhs, make_units<Rhs>>
+{};
+
 }  // namespace detail
 
-template <UnitSpec Lhs, UnitSpec Rhs>
+template <detail::UnitSpecOrSingle Lhs, detail::UnitSpecOrSingle Rhs>
 using unit_mul = typename detail::unit_mul_helper<Lhs, Rhs>::type;
 
-template <UnitSpec Lhs, UnitSpec Rhs>
+template <detail::UnitSpecOrSingle Lhs, detail::UnitSpecOrSingle Rhs>
 using unit_div = typename detail::unit_div_helper<Lhs, Rhs>::type;
 
 template <UnitSpec T, UnitSpec U>
@@ -86,9 +116,6 @@ concept SameUnitHelper = UnitSpec<T> && UnitSpec<U> && units_equal_v<T, U>;
 
 template <typename T, typename U>
 concept SameUnitAs = detail::SameUnitHelper<T, U> && detail::SameUnitHelper<U, T>;
-
-template <PhysicalUnitType... Units>
-using make_units = Unit<UnitList<Units...>>;
 
 }  // namespace micromouse
 
