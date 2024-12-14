@@ -12,19 +12,27 @@ namespace micromouse
 /**
  * @brief A base class for strongly typed wrappers.
  *
- * @example using MyStrongInt = StronglyTyped<int>
+ * @example struct MyStrongInt : StronglyTyped<int, MyStrongInt>
+ *          {
+ *              using StronglyTyped<int, MyStrongInt>::StronglyTyped;
+ *          };
+ *
+ * @note Intended use is to publicly inherit from this struct and explicitly add a `using` directive for the
+ * constructor.
  *
  * @tparam T    Inner type.
- * @tparam Tag  Type separating tag (should always use the default).
+ * @tparam Tag  CRTP parameter.
  */
-template <typename T, typename Tag = decltype([] {})>
+template <typename T, typename Tag>
     requires (std::is_trivially_copyable_v<T>)
-class StronglyTyped
+struct StronglyTyped
 {
-public:
     using type = T;
+    using Self = Tag;  // Prepare for default lambda tags...
+    // Tag is incomplete if using the `struct A: StronglyTyped<int, A> { ... };` form so this line is impossible:
+    // using Self = std::conditional_t<std::is_base_of_v<StronglyTyped, Tag>, Tag, StronglyTyped>;
 
-    constexpr StronglyTyped() noexcept = default;
+    constexpr StronglyTyped() noexcept : StronglyTyped(type{}) {}
     explicit constexpr StronglyTyped(type val) noexcept : value(val) {}
     template <typename... Args>
     explicit constexpr StronglyTyped(Args &&...args) noexcept : value(std::forward<Args>(args)...)
@@ -58,236 +66,234 @@ public:
         return lhs.value <=> rhs;
     }
 
-    friend constexpr StronglyTyped operator+(const StronglyTyped &val) noexcept(noexcept(+std::declval<type>()))
+    friend constexpr Self operator+(const StronglyTyped &val) noexcept(noexcept(+std::declval<type>()))
         requires (requires (T a) {
             { +a } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{+val.value};
+        return Self{+val.value};
     }
-    friend constexpr StronglyTyped operator-(const StronglyTyped &val) noexcept(noexcept(-std::declval<type>()))
+    friend constexpr Self operator-(const StronglyTyped &val) noexcept(noexcept(-std::declval<type>()))
         requires (requires (T a) {
             { -a } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{-val.value};
+        return Self{-val.value};
     }
-    friend constexpr StronglyTyped operator~(const StronglyTyped &val) noexcept(noexcept(~std::declval<type>()))
+    friend constexpr Self operator~(const StronglyTyped &val) noexcept(noexcept(~std::declval<type>()))
         requires (requires (T a) {
             { ~a } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{~val.value};
+        return Self{~val.value};
     }
-    constexpr StronglyTyped &operator++() noexcept(noexcept(++std::declval<type &>()))
+    constexpr Self &operator++() noexcept(noexcept(++std::declval<type &>()))
         requires (requires (T a) {
             { ++a };
         })
     {
         ++value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped operator++(int) noexcept(noexcept(std::declval<type &>()++))
+    constexpr Self operator++(int) noexcept(noexcept(std::declval<type &>()++))
         requires (requires (T a) {
             { a++ } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{value++};
+        return Self{value++};
     }
-    constexpr StronglyTyped &operator--() noexcept(noexcept(--std::declval<type &>()))
+    constexpr Self &operator--() noexcept(noexcept(--std::declval<type &>()))
         requires (requires (T a) {
             { --a };
         })
     {
         --value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped operator--(int) noexcept(noexcept(std::declval<type &>()--))
+    constexpr Self operator--(int) noexcept(noexcept(std::declval<type &>()--))
         requires (requires (T a) {
             { a-- } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{value--};
+        return Self{value--};
     }
 
-    friend constexpr StronglyTyped operator+(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator+(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value + rhs.value))
         requires (requires (T a, T b) {
             { a + b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value + rhs.value};
+        return Self{lhs.value + rhs.value};
     }
-    friend constexpr StronglyTyped operator-(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator-(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value - rhs.value))
         requires (requires (T a, T b) {
             { a - b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value - rhs.value};
+        return Self{lhs.value - rhs.value};
     }
-    friend constexpr StronglyTyped operator*(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator*(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value * rhs.value))
         requires (requires (T a, T b) {
             { a * b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value * rhs.value};
+        return Self{lhs.value * rhs.value};
     }
-    friend constexpr StronglyTyped operator/(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator/(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value / rhs.value))
         requires (requires (T a, T b) {
             { a / b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value / rhs.value};
+        return Self{lhs.value / rhs.value};
     }
-    friend constexpr StronglyTyped operator%(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator%(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value % rhs.value))
         requires (requires (T a, T b) {
             { a % b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value % rhs.value};
+        return Self{lhs.value % rhs.value};
     }
-    friend constexpr StronglyTyped operator^(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator^(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value ^ rhs.value))
         requires (requires (T a, T b) {
             { a ^ b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value ^ rhs.value};
+        return Self{lhs.value ^ rhs.value};
     }
-    friend constexpr StronglyTyped operator&(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator&(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value & rhs.value))
         requires (requires (T a, T b) {
             { a & b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value & rhs.value};
+        return Self{lhs.value & rhs.value};
     }
-    friend constexpr StronglyTyped operator|(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator|(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value | rhs.value))
         requires (requires (T a, T b) {
             { a | b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value | rhs.value};
+        return Self{lhs.value | rhs.value};
     }
-    friend constexpr StronglyTyped operator<<(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator<<(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value << rhs.value))
         requires (requires (T a, T b) {
             { a << b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value << rhs.value};
+        return Self{lhs.value << rhs.value};
     }
-    friend constexpr StronglyTyped operator>>(const StronglyTyped &lhs, const StronglyTyped &rhs)
+    friend constexpr Self operator>>(const StronglyTyped &lhs, const StronglyTyped &rhs)
         noexcept(noexcept(lhs.value >> rhs.value))
         requires (requires (T a, T b) {
             { a >> b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value >> rhs.value};
+        return Self{lhs.value >> rhs.value};
     }
     template <typename U>
-    friend constexpr StronglyTyped operator<<(const StronglyTyped &lhs, const U &rhs)
-        noexcept(noexcept(lhs.value << rhs))
+    friend constexpr Self operator<<(const StronglyTyped &lhs, const U &rhs) noexcept(noexcept(lhs.value << rhs))
         requires (requires (T a, U b) {
             { a << b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value << rhs};
+        return Self{lhs.value << rhs};
     }
     template <typename U>
-    friend constexpr StronglyTyped operator>>(const StronglyTyped &lhs, const U &rhs)
-        noexcept(noexcept(lhs.value >> rhs))
+    friend constexpr Self operator>>(const StronglyTyped &lhs, const U &rhs) noexcept(noexcept(lhs.value >> rhs))
         requires (requires (T a, U b) {
             { a >> b } -> std::convertible_to<type>;
         })
     {
-        return StronglyTyped{lhs.value >> rhs};
+        return Self{lhs.value >> rhs};
     }
 
-    constexpr StronglyTyped &operator+=(const StronglyTyped &other) noexcept(noexcept(value += other.value))
+    Self &operator+=(const StronglyTyped &other) noexcept(noexcept(value += other.value))
         requires (requires (T a, T b) {
             { a += b };
         })
     {
         value += other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator-=(const StronglyTyped &other) noexcept(noexcept(value -= other.value))
+    Self &operator-=(const StronglyTyped &other) noexcept(noexcept(value -= other.value))
         requires (requires (T a, T b) {
             { a -= b };
         })
     {
         value -= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator*=(const StronglyTyped &other) noexcept(noexcept(value *= other.value))
+    Self &operator*=(const StronglyTyped &other) noexcept(noexcept(value *= other.value))
         requires (requires (T a, T b) {
             { a *= b };
         })
     {
         value *= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator/=(const StronglyTyped &other) noexcept(noexcept(value /= other.value))
+    Self &operator/=(const StronglyTyped &other) noexcept(noexcept(value /= other.value))
         requires (requires (T a, T b) {
             { a /= b };
         })
     {
         value /= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator%=(const StronglyTyped &other) noexcept(noexcept(value %= other.value))
+    Self &operator%=(const StronglyTyped &other) noexcept(noexcept(value %= other.value))
         requires (requires (T a, T b) {
             { a %= b };
         })
     {
         value %= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator^=(const StronglyTyped &other) noexcept(noexcept(value ^= other.value))
+    Self &operator^=(const StronglyTyped &other) noexcept(noexcept(value ^= other.value))
         requires (requires (T a, T b) {
             { a ^= b };
         })
     {
         value ^= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator&=(const StronglyTyped &other) noexcept(noexcept(value &= other.value))
+    Self &operator&=(const StronglyTyped &other) noexcept(noexcept(value &= other.value))
         requires (requires (T a, T b) {
             { a &= b };
         })
     {
         value &= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator|=(const StronglyTyped &other) noexcept(noexcept(value |= other.value))
+    Self &operator|=(const StronglyTyped &other) noexcept(noexcept(value |= other.value))
         requires (requires (T a, T b) {
             { a |= b };
         })
     {
         value |= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator<<=(const StronglyTyped &other) noexcept(noexcept(value <<= other.value))
+    Self &operator<<=(const StronglyTyped &other) noexcept(noexcept(value <<= other.value))
         requires (requires (T a, T b) {
             { a <<= b };
         })
     {
         value <<= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
-    constexpr StronglyTyped &operator>>=(const StronglyTyped &other) noexcept(noexcept(value >>= other.value))
+    Self &operator>>=(const StronglyTyped &other) noexcept(noexcept(value >>= other.value))
         requires (requires (T a, T b) {
             { a >>= b };
         })
     {
         value >>= other.value;
-        return *this;
+        return static_cast<Self &>(*this);
     }
 
     explicit constexpr operator bool() const noexcept(noexcept(static_cast<bool>(std::declval<type>())))
@@ -302,17 +308,16 @@ public:
     {
         return !value;
     }
-    constexpr StronglyTyped operator!() const noexcept(noexcept(!std::declval<type>()))
+    constexpr Self operator!() const noexcept(noexcept(!std::declval<type>()))
         requires (std::is_same_v<type, bool> || requires (T a) {
             { !a };
             requires !std::is_same_v<decltype(!a), bool>;
             requires std::is_constructible_v<bool, decltype(!a)>;
         })
     {
-        return StronglyTyped{!value};
+        return Self{!value};
     }
 
-private:
     type value;
 };
 
