@@ -84,17 +84,23 @@ public:
     constexpr PhysicalSize() noexcept = default;
     explicit(!units_equal_v<units, make_units<>>) constexpr PhysicalSize(rep val) noexcept : value(val) {}
     template <typename... Args>
-    explicit constexpr PhysicalSize(Args &&...args) noexcept : value(std::forward<Args>(args)...)
+        requires (std::is_constructible_v<rep, Args...>)
+    explicit constexpr PhysicalSize(Args &&...args) noexcept(std::is_nothrow_constructible_v<rep, Args...>)
+        : value(std::forward<Args>(args)...)
     {
     }
     template <std::convertible_to<rep> RepU, SameUnitAs<units> UnitsU>
         requires (!std::is_same_v<units, UnitsU>)
-    constexpr PhysicalSize(PhysicalSize<RepU, UnitsU, ratio> other) noexcept : value(other.count())
+    constexpr PhysicalSize(const PhysicalSize<RepU, UnitsU, ratio> &other)
+        noexcept(std::is_nothrow_convertible_v<RepU, rep>)
+        : value(other.count())
     {
     }
     template <std::convertible_to<rep> RepU>
         requires (units_equal_v<units, make_units<Time>>)
-    constexpr PhysicalSize(std::chrono::duration<RepU, ratio> dur) noexcept : value(dur.count())
+    constexpr PhysicalSize(const std::chrono::duration<RepU, ratio> &dur)
+        noexcept(std::is_nothrow_convertible_v<RepU, rep>)
+        : value(dur.count())
     {
     }
 
@@ -266,6 +272,18 @@ public:
         requires (units_equal_v<units, make_units<Time>>)
     {
         return std::chrono::duration<rep, ratio>(count());
+    }
+
+    constexpr operator rep() noexcept
+        requires (units_equal_v<units, make_units<>> && std::ratio_equal_v<ratio, std::ratio<1>>)
+    {
+        return count();
+    }
+
+    explicit constexpr operator rep() noexcept
+        requires (units_equal_v<units, make_units<>> && !std::ratio_equal_v<ratio, std::ratio<1>>)
+    {
+        return count() * ratio::num / ratio::den;
     }
 
 private:
