@@ -1,7 +1,6 @@
 #ifndef MISC_UTILS_ANGLE_H
 #define MISC_UTILS_ANGLE_H
 
-#include "strongly_typed.h"
 #include "typing_utils.h"
 #include "value_range.h"
 
