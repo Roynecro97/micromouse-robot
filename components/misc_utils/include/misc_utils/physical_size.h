@@ -356,6 +356,7 @@ constexpr auto unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
 using meters = PhysicalSize<float, make_units<Distance>>;
 using centimeters = PhysicalSize<float, make_units<Distance>, std::centi>;
 using millimeters = PhysicalSize<float, make_units<Distance>, std::milli>;
+using meters_per_second = PhysicalSize<float, unit_div<Distance, Time>>;
 
 inline namespace unit_literals
 {
@@ -388,6 +389,16 @@ consteval millimeters operator""_mm(long double val)
 consteval millimeters operator""_mm(unsigned long long val)
 {
     return millimeters(val);
+}
+
+consteval meters_per_second operator""_mps(long double val)
+{
+    return meters_per_second(val);
+}
+
+consteval meters_per_second operator""_mps(unsigned long long val)
+{
+    return meters_per_second(val);
 }
 
 }  // namespace unit_literals
