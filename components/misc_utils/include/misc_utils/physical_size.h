@@ -82,25 +82,25 @@ public:
     using units = Units;
 
     constexpr PhysicalSize() noexcept = default;
-    explicit(!units_equal_v<Units, make_units<>>) constexpr PhysicalSize(rep val) noexcept : value(val) {}
+    explicit(!units_equal_v<units, make_units<>>) constexpr PhysicalSize(rep val) noexcept : value(val) {}
     template <typename... Args>
     explicit constexpr PhysicalSize(Args &&...args) noexcept : value(std::forward<Args>(args)...)
     {
     }
-    template <std::convertible_to<Rep> RepU, SameUnitAs<Units> UnitsU>
-        requires (!std::is_same_v<Units, UnitsU>)
-    constexpr PhysicalSize(PhysicalSize<RepU, UnitsU, Ratio> other) noexcept : value(other.count())
+    template <std::convertible_to<rep> RepU, SameUnitAs<units> UnitsU>
+        requires (!std::is_same_v<units, UnitsU>)
+    constexpr PhysicalSize(PhysicalSize<RepU, UnitsU, ratio> other) noexcept : value(other.count())
     {
     }
-    template <std::convertible_to<Rep> RepU>
-        requires (units_equal_v<Units, make_units<Time>>)
-    constexpr PhysicalSize(std::chrono::duration<RepU, Ratio> dur) noexcept : value(dur.count())
+    template <std::convertible_to<rep> RepU>
+        requires (units_equal_v<units, make_units<Time>>)
+    constexpr PhysicalSize(std::chrono::duration<RepU, ratio> dur) noexcept : value(dur.count())
     {
     }
 
     friend constexpr auto operator<=>(const PhysicalSize &lhs, const PhysicalSize &rhs) noexcept = default;
-    template <std::totally_ordered_with<Rep> RepU, SameUnitAs<Units> UnitsU>
-    friend constexpr auto operator<=>(const PhysicalSize &lhs, const PhysicalSize<RepU, UnitsU, Ratio> &rhs) noexcept
+    template <std::totally_ordered_with<rep> RepU, SameUnitAs<units> UnitsU>
+    friend constexpr auto operator<=>(const PhysicalSize &lhs, const PhysicalSize<RepU, UnitsU, ratio> &rhs) noexcept
     {
         return lhs.count() <=> rhs.count();
     }
@@ -146,110 +146,127 @@ public:
         value -= other.value;
         return *this;
     }
-    template <std::convertible_to<Rep> T>
-        requires requires (Rep a, T b) {
+    template <std::convertible_to<rep> T>
+        requires requires (rep a, T b) {
             { a *= b };
         }
-    constexpr auto &operator*=(const T &other) noexcept(noexcept(std::declval<Rep &>() *= other))
+    constexpr auto &operator*=(const T &other) noexcept(noexcept(std::declval<rep &>() *= other))
     {
         value *= other;
         return *this;
     }
-    template <std::convertible_to<Rep> T>
-        requires requires (Rep a, T b) {
+    template <std::convertible_to<rep> T>
+        requires requires (rep a, T b) {
             { a /= b };
         }
-    constexpr auto &operator/=(const T &other) noexcept(noexcept(std::declval<Rep &>() /= other))
+    constexpr auto &operator/=(const T &other) noexcept(noexcept(std::declval<rep &>() /= other))
     {
         value /= other;
         return *this;
     }
 
     template <UnitSpec UnitsU, RatioSpec RatioU>
-    friend constexpr auto operator*(const PhysicalSize &lhs, const PhysicalSize<Rep, UnitsU, RatioU> &rhs) noexcept
+    friend constexpr auto operator*(const PhysicalSize &lhs, const PhysicalSize<rep, UnitsU, RatioU> &rhs) noexcept
     {
-        return PhysicalSize<Rep, unit_mul<Units, UnitsU>, std::ratio_multiply<Ratio, RatioU>>(
+        return PhysicalSize<rep, unit_mul<units, UnitsU>, std::ratio_multiply<ratio, RatioU>>(
             lhs.count() * rhs.count()
         );
     }
     template <UnitSpec UnitsU, RatioSpec RatioU>
-    friend constexpr auto operator/(const PhysicalSize &lhs, const PhysicalSize<Rep, UnitsU, RatioU> &rhs) noexcept
+    friend constexpr auto operator/(const PhysicalSize &lhs, const PhysicalSize<rep, UnitsU, RatioU> &rhs) noexcept
     {
-        return PhysicalSize<Rep, unit_div<Units, UnitsU>, std::ratio_divide<Ratio, RatioU>>(lhs.count() / rhs.count());
+        return PhysicalSize<rep, unit_div<units, UnitsU>, std::ratio_divide<ratio, RatioU>>(lhs.count() / rhs.count());
     }
 
     template <PartialArithmetic RepU, RatioSpec RatioU>
-        requires (requires (Rep a, RepU b) {
-            { a * b } -> std::convertible_to<Rep>;
+        requires (requires (rep a, RepU b) {
+            { a * b } -> std::convertible_to<rep>;
         })
     friend constexpr auto operator*(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
-        noexcept(noexcept(std::declval<Rep>() * std::declval<RepU>()))
+        noexcept(noexcept(std::declval<rep>() * std::declval<RepU>()))
     {
-        return PhysicalSize<Rep, unit_mul<Units, make_units<Time>>, std::ratio_multiply<Ratio, RatioU>>(
+        return PhysicalSize<rep, unit_mul<units, make_units<Time>>, std::ratio_multiply<ratio, RatioU>>(
             lhs.count() * rhs.count()
         );
     }
     template <PartialArithmetic RepU, RatioSpec RatioU>
-        requires (requires (Rep a, RepU b) {
-            { a / b } -> std::convertible_to<Rep>;
+        requires (requires (rep a, RepU b) {
+            { a / b } -> std::convertible_to<rep>;
         })
     friend constexpr auto operator/(const PhysicalSize &lhs, const std::chrono::duration<RepU, RatioU> &rhs)
-        noexcept(noexcept(std::declval<Rep>() * std::declval<RepU>()))
+        noexcept(noexcept(std::declval<rep>() / std::declval<RepU>()))
     {
-        return PhysicalSize<Rep, unit_div<Units, make_units<Time>>, std::ratio_divide<Ratio, RatioU>>(
+        return PhysicalSize<rep, unit_div<units, make_units<Time>>, std::ratio_divide<ratio, RatioU>>(
             lhs.count() / rhs.count()
         );
     }
 
-    template <std::convertible_to<Rep> T>
-        requires requires (Rep a, T b) {
-            { a * b } -> std::convertible_to<Rep>;
+    template <PartialArithmetic RepU, RatioSpec RatioU>
+        requires (requires (RepU a, rep b) {
+            { a * b } -> std::convertible_to<rep>;
+        })
+    friend constexpr auto operator*(const std::chrono::duration<RepU, RatioU> &lhs, const PhysicalSize &rhs)
+        noexcept(noexcept(std::declval<rep>() * std::declval<RepU>()))
+    {
+        return PhysicalSize<RepU, unit_mul<Time, units>, std::ratio_multiply<RatioU, ratio>>(lhs.count() * rhs.count());
+    }
+    template <PartialArithmetic RepU, RatioSpec RatioU>
+        requires (requires (RepU a, rep b) {
+            { a / b } -> std::convertible_to<rep>;
+        })
+    friend constexpr auto operator/(const std::chrono::duration<RepU, RatioU> &lhs, const PhysicalSize &rhs)
+        noexcept(noexcept(std::declval<rep>() / std::declval<RepU>()))
+    {
+        return PhysicalSize<RepU, unit_div<Time, units>, std::ratio_divide<RatioU, ratio>>(lhs.count() / rhs.count());
+    }
+
+    template <std::convertible_to<rep> T>
+        requires requires (rep a, T b) {
+            { a * b } -> std::convertible_to<rep>;
         }
     friend constexpr auto operator*(const PhysicalSize &lhs, const T &rhs) noexcept(noexcept(lhs.count() * rhs))
     {
         return PhysicalSize(lhs.count() * rhs);
     }
-    template <std::convertible_to<Rep> T>
-        requires requires (Rep a, T b) {
-            { a / b } -> std::convertible_to<Rep>;
+    template <std::convertible_to<rep> T>
+        requires requires (rep a, T b) {
+            { a / b } -> std::convertible_to<rep>;
         }
     friend constexpr auto operator/(const PhysicalSize &lhs, const T &rhs) noexcept(noexcept(lhs.count() / rhs))
     {
         return PhysicalSize(lhs.count() / rhs);
     }
 
-    template <std::convertible_to<Rep> T>
-        requires requires (T a, Rep b) {
-            { a * b } -> std::convertible_to<Rep>;
+    template <std::convertible_to<rep> T>
+        requires requires (T a, rep b) {
+            { a * b } -> std::convertible_to<rep>;
         }
     friend constexpr auto operator*(const T &lhs, const PhysicalSize &rhs) noexcept(noexcept(lhs * rhs.count()))
     {
         return PhysicalSize(lhs * rhs.count());
     }
-    template <std::convertible_to<Rep> T>
-        requires requires (T a, Rep b) {
-            { a / b } -> std::convertible_to<Rep>;
+    template <std::convertible_to<rep> T>
+        requires requires (T a, rep b) {
+            { a / b } -> std::convertible_to<rep>;
         }
     friend constexpr auto operator/(const T &lhs, const PhysicalSize &rhs) noexcept(noexcept(lhs / rhs.count()))
     {
-        return PhysicalSize<Rep, unit_div<make_units<>, Units>, std::ratio_divide<std::ratio<1>, Ratio>>(
+        return PhysicalSize<rep, unit_div<make_units<>, units>, std::ratio_divide<std::ratio<1>, ratio>>(
             lhs / rhs.count()
         );
     }
 
     constexpr rep count() const noexcept { return value; }
-    static constexpr auto zero() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::zero()); }
-    static constexpr auto one() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::one()); }
-    static constexpr auto min() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::min()); }
-    static constexpr auto max() noexcept { return PhysicalSize(PhysicalSizeValues<Rep>::max()); }
+    static constexpr auto zero() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::zero()); }
+    static constexpr auto one() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::one()); }
+    static constexpr auto min() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::min()); }
+    static constexpr auto max() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::max()); }
 
-    constexpr std::chrono::duration<Rep, Ratio> to_duration() noexcept
-        requires (units_equal_v<Units, make_units<Time>>)
+    constexpr std::chrono::duration<rep, ratio> to_duration() noexcept
+        requires (units_equal_v<units, make_units<Time>>)
     {
-        return std::chrono::duration<Rep, Ratio>(count());
+        return std::chrono::duration<rep, ratio>(count());
     }
-
-    static consteval const char *units_str() { return ""; }
 
 private:
     rep value{};
