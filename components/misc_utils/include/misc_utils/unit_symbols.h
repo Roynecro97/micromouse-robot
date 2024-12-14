@@ -169,7 +169,7 @@ consteval auto to_string(S val) noexcept
 template <PhysicalUnitType T>
 struct symbol_helper<T>
 {
-    static constexpr auto symbol = T::si_unit;
+    static constexpr TString symbol{{T::unit, '\0'}};
 };
 
 template <PhysicalUnitType... Ts>
