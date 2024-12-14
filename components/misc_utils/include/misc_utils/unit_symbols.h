@@ -18,10 +18,27 @@
 namespace micromouse
 {
 
-template <PhysicalUnitType T>
-consteval auto get_symbol()
+namespace detail
 {
-    return T::si_unit;
+
+template <typename T>
+concept HasSymbol = PhysicalUnitType<T> || UnitListType<T> || UnitSpec<T> || RatioSpec<T> || PhysicalSizeType<T>;
+
+template <HasSymbol>
+struct symbol_helper;
+
+}  // namespace detail
+
+template <detail::HasSymbol T>
+consteval const char *get_symbol()
+{
+    return detail::symbol_helper<T>::symbol;
+}
+
+template <PhysicalSizeType T>
+consteval auto get_symbol(const T &)
+{
+    return get_symbol<T>();
 }
 
 namespace detail
@@ -149,8 +166,11 @@ consteval auto to_string(S val) noexcept
     return res;
 }
 
-template <typename>
-struct symbol_helper;
+template <PhysicalUnitType T>
+struct symbol_helper<T>
+{
+    static constexpr auto symbol = T::si_unit;
+};
 
 template <PhysicalUnitType... Ts>
 struct symbol_helper<UnitList<Ts...>>
@@ -218,8 +238,8 @@ struct symbol_helper<UnitList<Ts...>>
 template <UnitSpec T>
 struct symbol_helper<T>
 {
-    static constexpr auto num_sym = std::string_view(detail::symbol_helper<typename T::num>::symbol);
-    static constexpr auto den_sym = std::string_view(detail::symbol_helper<typename T::den>::symbol);
+    static constexpr auto num_sym = std::string_view(symbol_helper<typename T::num>::symbol);
+    static constexpr auto den_sym = std::string_view(symbol_helper<typename T::den>::symbol);
 
     static consteval auto get_symbol_impl()
     {
@@ -277,61 +297,6 @@ struct symbol_helper<T>
     static constexpr auto symbol = get_symbol_impl();
 };
 
-}  // namespace detail
-
-template <UnitListType T>
-consteval const char *get_symbol()
-{
-    return detail::symbol_helper<T>::symbol;
-}
-
-template <UnitSpec T>
-consteval const char *get_symbol()
-{
-    return detail::symbol_helper<T>::symbol;
-}
-
-template <>
-consteval const char *get_symbol<Unit<UnitList<>>>()
-{
-    return "";
-}
-
-template <>
-consteval const char *get_symbol<Unit<UnitList<>, UnitList<Time>>>()
-{
-    return "Hz";
-}
-
-template <RatioSpec T>
-consteval const char *get_symbol()
-{
-    return detail::symbol_helper<T>::symbol;
-}
-
-// clang-format off
-template <> consteval const char *get_symbol<std::atto>() { return "a"; }
-template <> consteval const char *get_symbol<std::femto>() { return "f"; }
-template <> consteval const char *get_symbol<std::pico>() { return "p"; }
-template <> consteval const char *get_symbol<std::nano>() { return "n"; }
-template <> consteval const char *get_symbol<std::micro>() { return "u"; }
-template <> consteval const char *get_symbol<std::milli>() { return "m"; }
-template <> consteval const char *get_symbol<std::centi>() { return "c"; }
-template <> consteval const char *get_symbol<std::deci>() { return "d"; }
-template <> consteval const char *get_symbol<std::deca>() { return "da"; }
-template <> consteval const char *get_symbol<std::hecto>() { return "h"; }
-template <> consteval const char *get_symbol<std::kilo>() { return "k"; }
-template <> consteval const char *get_symbol<std::mega>() { return "M"; }
-template <> consteval const char *get_symbol<std::giga>() { return "G"; }
-template <> consteval const char *get_symbol<std::tera>() { return "T"; }
-template <> consteval const char *get_symbol<std::peta>() { return "P"; }
-template <> consteval const char *get_symbol<std::exa>() { return "E"; }
-template <> consteval const char *get_symbol<std::ratio<1>>() { return ""; }
-// clang-format on
-
-namespace detail
-{
-
 template <PhysicalSizeType T>
 struct symbol_helper<T>
 {
@@ -351,17 +316,28 @@ struct symbol_helper<T>
 
 }  // namespace detail
 
-template <PhysicalSizeType T>
-consteval const char *get_symbol()
-{
-    return detail::symbol_helper<T>::symbol;
-}
+// clang-format off
+template <> consteval const char *get_symbol<make_units<>>() { return ""; }
+template <> consteval const char *get_symbol<unit_div<make_units<>, Time>>() { return "Hz"; }
 
-template <PhysicalSizeType T>
-consteval auto get_symbol(const T &)
-{
-    return get_symbol<T>();
-}
+template <> consteval const char *get_symbol<std::atto>() { return "a"; }
+template <> consteval const char *get_symbol<std::femto>() { return "f"; }
+template <> consteval const char *get_symbol<std::pico>() { return "p"; }
+template <> consteval const char *get_symbol<std::nano>() { return "n"; }
+template <> consteval const char *get_symbol<std::micro>() { return "u"; }
+template <> consteval const char *get_symbol<std::milli>() { return "m"; }
+template <> consteval const char *get_symbol<std::centi>() { return "c"; }
+template <> consteval const char *get_symbol<std::deci>() { return "d"; }
+template <> consteval const char *get_symbol<std::deca>() { return "da"; }
+template <> consteval const char *get_symbol<std::hecto>() { return "h"; }
+template <> consteval const char *get_symbol<std::kilo>() { return "k"; }
+template <> consteval const char *get_symbol<std::mega>() { return "M"; }
+template <> consteval const char *get_symbol<std::giga>() { return "G"; }
+template <> consteval const char *get_symbol<std::tera>() { return "T"; }
+template <> consteval const char *get_symbol<std::peta>() { return "P"; }
+template <> consteval const char *get_symbol<std::exa>() { return "E"; }
+template <> consteval const char *get_symbol<std::ratio<1>>() { return ""; }
+// clang-format on
 
 }  // namespace micromouse
 
