@@ -144,7 +144,7 @@ IncludeCategories:
     Priority: 5
   - Regex: "<[[:alnum:]_]+>"
     Priority: 5
-  - Regex: '(<|")maze_solver/'
+  - Regex: '(<|")(maze_solver|misc_utils)/'
     Priority: 1
     CaseSensitive: true
   - Regex: '(<|")sdkconfig.h'

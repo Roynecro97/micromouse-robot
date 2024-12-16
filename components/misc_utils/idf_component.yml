@@ -1,0 +1,4 @@
+# dependencies:
+version: "0.0.1"
+description: "Miscellaneous utilities for the robot and the maze solver."
+url: "https://github.com/Roynecro97/micromouse-robot"
