@@ -335,6 +335,12 @@ constexpr ToSize unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
     }
 }
 
+template <PartialArithmetic Rep, RatioSpec Ratio>
+PhysicalSize(const std::chrono::duration<Rep, Ratio> &) -> PhysicalSize<Rep, make_units<Time>, Ratio>;
+
+template <PartialArithmetic Rep>
+PhysicalSize(const Rep &) -> PhysicalSize<Rep>;
+
 template <RatioSpec ToRatio, PartialArithmetic Rep, UnitSpec Units, RatioSpec Ratio>
 constexpr auto unit_cast(const PhysicalSize<Rep, Units, Ratio> &ps)
 {
