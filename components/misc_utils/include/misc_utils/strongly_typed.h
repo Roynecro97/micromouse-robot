@@ -9,6 +9,9 @@
 namespace micromouse
 {
 
+template <typename T>
+struct is_strongly_typed;
+
 /**
  * @brief A base class for strongly typed wrappers.
  *
@@ -216,7 +219,7 @@ struct StronglyTypedBase
     }
     template <typename U>
     friend constexpr Self operator<<(const StronglyTypedBase &lhs, const U &rhs) noexcept(noexcept(lhs.value << rhs))
-        requires (requires (T a, U b) {
+        requires (!is_strongly_typed<U>::value && requires (T a, U b) {
             { a << b } -> std::convertible_to<type>;
         })
     {
@@ -224,7 +227,7 @@ struct StronglyTypedBase
     }
     template <typename U>
     friend constexpr Self operator>>(const StronglyTypedBase &lhs, const U &rhs) noexcept(noexcept(lhs.value >> rhs))
-        requires (requires (T a, U b) {
+        requires (!is_strongly_typed<U>::value && requires (T a, U b) {
             { a >> b } -> std::convertible_to<type>;
         })
     {
