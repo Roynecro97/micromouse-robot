@@ -37,6 +37,7 @@ constexpr auto invert(RelativeDirection rd) noexcept
     case RelativeDirection::Right:
         return RelativeDirection::Left;
     }
+    return rd;
 }
 
 constexpr auto enum2str(RelativeDirection rd) noexcept
@@ -95,6 +96,7 @@ constexpr auto turn_left(Direction d) noexcept
     case Direction::West:
         return Direction::South;
     }
+    return d;
 }
 
 /**
@@ -116,6 +118,7 @@ constexpr auto turn_right(Direction d) noexcept
     case Direction::West:
         return Direction::North;
     }
+    return d;
 }
 
 /**
@@ -137,6 +140,7 @@ constexpr auto turn_back(Direction d) noexcept
     case Direction::West:
         return Direction::East;
     }
+    return d;
 }
 
 /**
@@ -159,6 +163,7 @@ constexpr auto turn(Direction d, RelativeDirection rel) noexcept
     case RelativeDirection::Right:
         return turn_right(d);
     }
+    return d;
 }
 
 /**
@@ -178,8 +183,9 @@ constexpr auto to_degrees(Direction d) noexcept
     case Direction::South:
         return 90;
     case Direction::West:
-        return 180;
+        return -180;
     }
+    return 720;  // impossible value, should pop out
 }
 
 /**
