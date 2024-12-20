@@ -23,6 +23,23 @@ enum class Mode
     LeftInclusive = RightOpen,
 };
 
+constexpr auto enum2str(Mode mode) noexcept
+{
+    switch (mode)
+    {
+    case Mode::Closed:
+        return "Closed";
+    case Mode::Open:
+        return "Open";
+    case Mode::LeftOpen:
+        return "LeftOpen";
+    case Mode::RightOpen:
+        return "RightOpen";
+    default:
+        return "<invalid>";
+    }
+}
+
 template <PartialArithmetic T, T Low, T High, Mode M, T Epsilon = T(1e-6)>
     requires (Low < High)
 class ValueRange
