@@ -1,0 +1,4 @@
+# dependencies:
+version: "0.0.1"
+description: "Library to manipulate and solve a Micromouse maze"
+url: "https://github.com/Roynecro97/micromouse-robot"

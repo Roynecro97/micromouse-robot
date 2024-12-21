@@ -46,4 +46,10 @@ menu "Micromouse Configuration"
         help
             Define the blinking pattern.
 
+    config MICROMOUSE_UNITTEST_MODE
+        bool "Build unittests instead of the main app"
+        default false
+        help
+            Select running mode.
+
 endmenu

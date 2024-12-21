@@ -138,13 +138,15 @@ IncludeBlocks: Regroup #Preserve
 IncludeCategories:
   - Regex: '^(<|")(gtest|gmock|isl|json)/'
     Priority: 4
+  - Regex: '^(<|")hack.h'
+    Priority: 6
   - Regex: "<(sys/|std)[[:alnum:]._]+>"
     Priority: 5
   - Regex: "<(assert|complex|w?ctype|errno|fenv|float|inttypes|iso646|limits|locale|(tg)?math|setjmp|signal|string|threads|time|[uw]char)\\.h>"
     Priority: 5
   - Regex: "<[[:alnum:]_]+>"
     Priority: 5
-  - Regex: '(<|")maze_solver/'
+  - Regex: '(<|")(maze_solver|misc_utils)/'
     Priority: 1
     CaseSensitive: true
   - Regex: '(<|")sdkconfig.h'
