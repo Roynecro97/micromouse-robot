@@ -19,7 +19,7 @@
         "scope": "c,cpp",
         "prefix": "defguard",
         "body": [
-            "#ifndef ${1:${TM_DIRECTORY/(.*\\/(.+))?/${2:/upcase}${2:+_}/}${TM_FILENAME/([\\.-])|([^\\.-]+)/${1:+_}${2:/upcase}/g}}",
+            "#ifndef ${1:${TM_DIRECTORY/(.*[\\/\\\\](.+))?/${2:/upcase}${2:+_}/}${TM_FILENAME/([\\.-])|([^\\.-]+)/${1:+_}${2:/upcase}/g}}",
             "#define $1",
             "",
             "$0",
