@@ -2,9 +2,8 @@
 
 #include <misc_utils/angle.h>
 
-#include "strongly_typed_utils.h"
+#include "misc_utils_adapters.h"
 #include "type_list.h"
-#include "value_range_utils.h"
 #include "values.h"
 
 #include <gtest/gtest.h>

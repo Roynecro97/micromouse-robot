@@ -4,7 +4,7 @@
 #include <misc_utils/strongly_typed.h>
 
 #include "a.h"
-#include "strongly_typed_utils.h"
+#include "misc_utils_adapters.h"
 
 #include <gtest/gtest.h>
 
