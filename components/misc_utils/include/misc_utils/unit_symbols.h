@@ -269,6 +269,11 @@ struct symbol_helper<T>
 template <RatioSpec T>
 struct symbol_helper<T>
 {
+    static constexpr auto num = detail::to_string(T::num);
+    static constexpr auto den = detail::to_string(T::den);
+    static constexpr auto num_view = std::string_view(num);
+    static constexpr auto den_view = std::string_view(den);
+
     static consteval auto get_symbol_impl()
     {
         if constexpr (T::num == 0)
@@ -277,10 +282,6 @@ struct symbol_helper<T>
         }
         else
         {
-            static constexpr auto num = detail::to_string(T::num);
-            static constexpr auto den = detail::to_string(T::den);
-            static constexpr auto num_view = std::string_view(num);
-            static constexpr auto den_view = std::string_view(den);
             TString<num_view.size() + ((T::den != 1) ? den_view.size() + 2 : 1)> res;
             auto pos = std::begin(res.value);
             std::copy(begin(num_view), end(num_view), pos);

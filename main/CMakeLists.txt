@@ -29,6 +29,7 @@ if(CONFIG_MICROMOUSE_UNITTEST_MODE)
       ${GTEST_SRCS}
       ${GMOCK_SRCS}
 
+      unittests/physical_size_test.cc
       unittests/strongly_typed_test.cc
       unittests/typing_utils_test.cc
       unittests/value_range_test.cc

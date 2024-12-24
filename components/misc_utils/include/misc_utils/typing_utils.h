@@ -1,5 +1,5 @@
-#ifndef MISC_UTILS_FLOATING_POINT_H
-#define MISC_UTILS_FLOATING_POINT_H
+#ifndef MISC_UTILS_TYPING_UTILS_H
+#define MISC_UTILS_TYPING_UTILS_H
 
 #include <concepts>
 #include <numbers>
@@ -129,4 +129,4 @@ using make_floating_point = typename detail::make_floating_point_helper<T>::type
 
 }  // namespace micromouse
 
-#endif  // MISC_UTILS_FLOATING_POINT_H
+#endif  // MISC_UTILS_TYPING_UTILS_H

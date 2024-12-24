@@ -23,10 +23,12 @@
 
 #include "hack.h"
 
-LOAD_TEST_FILE(direction_tests);
+LOAD_TEST_FILE(physical_size_tests);
 LOAD_TEST_FILE(strongly_typed_tests);
 LOAD_TEST_FILE(type_utils_tests);
 LOAD_TEST_FILE(value_range_tests);
+
+LOAD_TEST_FILE(direction_tests);
 
 void run_tests()
 {

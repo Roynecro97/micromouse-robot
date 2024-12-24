@@ -23,7 +23,7 @@ struct TString
     consteval TString() noexcept = default;
     consteval TString(const char (&s)[N]) noexcept { std::copy(std::begin(s), std::end(s), value); }
 
-    consteval operator const char *() const noexcept { return value; }
+    constexpr operator const char *() const noexcept { return value; }
 
     char value[N]{};
 };
