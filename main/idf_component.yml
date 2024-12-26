@@ -1,5 +1,5 @@
 dependencies:
   espressif/arduino-esp32: '=3.0.0'
-  espressif/bdc_motor: "^0.1.0"
-  espressif/led_strip: "^2.0.0"
-  espressif/pid_ctrl: "^0.2.0"
+  espressif/bdc_motor: "=0.1.0"
+  espressif/led_strip: "=2.0.0"
+  espressif/pid_ctrl: "=0.2.0"
