@@ -55,6 +55,6 @@ else()
     SRCS
       main.cpp
     INCLUDE_DIRS
-      .
+      ../managed_components/espressif__eigen/eigen
   )
 endif()
