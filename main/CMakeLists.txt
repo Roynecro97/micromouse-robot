@@ -34,6 +34,7 @@ if(CONFIG_MICROMOUSE_UNITTEST_MODE)
       unittests/typing_utils_test.cc
       unittests/value_range_test.cc
 
+      unittests/cell_test.cc
       unittests/direction_test.cc
 
       unittests/test_main.cc
