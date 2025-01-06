@@ -1,6 +1,7 @@
 #ifndef MISC_UTILS_UNIT_SYMBOLS_H
 #define MISC_UTILS_UNIT_SYMBOLS_H
 
+#include "bits/to_string.h"
 #include "bits/tstring.h"
 #include "physical_size.h"
 
@@ -110,61 +111,6 @@ struct unit_list_count : unit_list_count_helper<T, U>
 
 template <UnitListType T, PhysicalUnitType U>
 inline constexpr auto unit_list_count_v = unit_list_count<T, U>::value;
-
-inline constexpr std::array digits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
-template <std::unsigned_integral U, U base = 10>
-    requires (base > 1 && base <= digits.size())
-consteval auto to_string(U val) noexcept
-{
-    TString<std::numeric_limits<U>::digits10 + 2> res{};
-    auto pos = std::end(res.value) - 1;
-    if (val == 0)
-    {
-        *--pos = digits[0];
-    }
-    else
-    {
-        while (val > 0)
-        {
-            *--pos = digits[val % base];
-            val /= base;
-        }
-    }
-    std::copy(pos, std::end(res.value), std::begin(res.value));
-    return res;
-}
-
-template <std::signed_integral S, S base = 10>
-    requires (base > 1 && base <= digits.size())
-consteval auto to_string(S val) noexcept
-{
-    TString<std::numeric_limits<S>::digits10 + 3> res{};
-    auto pos = std::end(res.value) - 1;
-    if (val == 0)
-    {
-        *--pos = digits[0];
-    }
-    else
-    {
-        bool neg = val < 0;
-        if (!neg)
-        {
-            val = -val;
-        }
-        while (val != 0)
-        {
-            *--pos = digits[-(val % base)];
-            val /= base;
-        }
-        if (neg)
-        {
-            *--pos = '-';
-        }
-    }
-    std::copy(pos, std::end(res.value), std::begin(res.value));
-    return res;
-}
 
 template <PhysicalUnitType T>
 struct symbol_helper<T>

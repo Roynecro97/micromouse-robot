@@ -234,7 +234,7 @@ struct StronglyTypedBase
         return Self{lhs.value >> rhs};
     }
 
-    Self &operator+=(const StronglyTypedBase &other) noexcept(noexcept(value += other.value))
+    constexpr Self &operator+=(const StronglyTypedBase &other) noexcept(noexcept(value += other.value))
         requires (requires (T a, T b) {
             { a += b };
         })
@@ -242,7 +242,7 @@ struct StronglyTypedBase
         value += other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator-=(const StronglyTypedBase &other) noexcept(noexcept(value -= other.value))
+    constexpr Self &operator-=(const StronglyTypedBase &other) noexcept(noexcept(value -= other.value))
         requires (requires (T a, T b) {
             { a -= b };
         })
@@ -250,7 +250,7 @@ struct StronglyTypedBase
         value -= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator*=(const StronglyTypedBase &other) noexcept(noexcept(value *= other.value))
+    constexpr Self &operator*=(const StronglyTypedBase &other) noexcept(noexcept(value *= other.value))
         requires (requires (T a, T b) {
             { a *= b };
         })
@@ -258,7 +258,7 @@ struct StronglyTypedBase
         value *= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator/=(const StronglyTypedBase &other) noexcept(noexcept(value /= other.value))
+    constexpr Self &operator/=(const StronglyTypedBase &other) noexcept(noexcept(value /= other.value))
         requires (requires (T a, T b) {
             { a /= b };
         })
@@ -266,7 +266,7 @@ struct StronglyTypedBase
         value /= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator%=(const StronglyTypedBase &other) noexcept(noexcept(value %= other.value))
+    constexpr Self &operator%=(const StronglyTypedBase &other) noexcept(noexcept(value %= other.value))
         requires (requires (T a, T b) {
             { a %= b };
         })
@@ -274,7 +274,7 @@ struct StronglyTypedBase
         value %= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator^=(const StronglyTypedBase &other) noexcept(noexcept(value ^= other.value))
+    constexpr Self &operator^=(const StronglyTypedBase &other) noexcept(noexcept(value ^= other.value))
         requires (requires (T a, T b) {
             { a ^= b };
         })
@@ -282,7 +282,7 @@ struct StronglyTypedBase
         value ^= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator&=(const StronglyTypedBase &other) noexcept(noexcept(value &= other.value))
+    constexpr Self &operator&=(const StronglyTypedBase &other) noexcept(noexcept(value &= other.value))
         requires (requires (T a, T b) {
             { a &= b };
         })
@@ -290,7 +290,7 @@ struct StronglyTypedBase
         value &= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator|=(const StronglyTypedBase &other) noexcept(noexcept(value |= other.value))
+    constexpr Self &operator|=(const StronglyTypedBase &other) noexcept(noexcept(value |= other.value))
         requires (requires (T a, T b) {
             { a |= b };
         })
@@ -298,7 +298,7 @@ struct StronglyTypedBase
         value |= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator<<=(const StronglyTypedBase &other) noexcept(noexcept(value <<= other.value))
+    constexpr Self &operator<<=(const StronglyTypedBase &other) noexcept(noexcept(value <<= other.value))
         requires (requires (T a, T b) {
             { a <<= b };
         })
@@ -306,7 +306,7 @@ struct StronglyTypedBase
         value <<= other.value;
         return static_cast<Self &>(*this);
     }
-    Self &operator>>=(const StronglyTypedBase &other) noexcept(noexcept(value >>= other.value))
+    constexpr Self &operator>>=(const StronglyTypedBase &other) noexcept(noexcept(value >>= other.value))
         requires (requires (T a, T b) {
             { a >>= b };
         })
