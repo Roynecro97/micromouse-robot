@@ -3,6 +3,7 @@
 #include <maze_solver/direction.h>
 
 #include "maze_solver_adapters.h"
+#include "mem_equals.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -41,16 +42,6 @@ constexpr std::array all_wall_combinations = {
     Walls::North | Walls::East | Walls::South | Walls::West,
 };
 }  // namespace
-
-MATCHER_P(
-    MemoryEquals,
-    expected,
-    "memory "s + (negation ? "not " : "") + "equals to " + ::testing::PrintToString(expected)
-)
-{
-    static_assert(sizeof(arg) == sizeof(expected));
-    return std::memcmp(&arg, &expected, sizeof(arg)) == 0;
-}
 
 template <Direction D>
 consteval std::byte to_byte() noexcept

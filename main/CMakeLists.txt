@@ -36,6 +36,7 @@ if(CONFIG_MICROMOUSE_UNITTEST_MODE)
 
       unittests/cell_test.cc
       unittests/direction_test.cc
+      unittests/maze_test.cc
 
       unittests/test_main.cc
     INCLUDE_DIRS

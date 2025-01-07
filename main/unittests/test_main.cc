@@ -6,11 +6,13 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
-#include <misc_utils/angle.h>
+#include <maze_solver/maze_samples/small_8x8.h>
 
-#include "sdkconfig.h"
+#include "../hexdump.h"
 
 #include <gtest/gtest.h>
+
+#include <sdkconfig.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -30,6 +32,7 @@ LOAD_TEST_FILE(value_range_tests);
 
 LOAD_TEST_FILE(cell_tests);
 LOAD_TEST_FILE(direction_tests);
+LOAD_TEST_FILE(maze_tests);
 
 void run_tests()
 {
@@ -48,6 +51,13 @@ void run_tests()
     {
         ESP_LOGE("googletest", "Error in tests (exitcode: %d)", retcode);
     }
+
+    ESP_LOGI("preview", "Running hexdump on a maze multiple times");
+    micromouse::hexdump(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_e(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_w(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_i(micromouse::mazes::small_8x8);
+    micromouse::HexDumperE{}(micromouse::mazes::small_8x8);
 }
 
 static const char *TAG = "example";
