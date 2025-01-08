@@ -136,16 +136,16 @@ IfMacros:
   - KJ_IF_MAYBE
 IncludeBlocks: Regroup #Preserve
 IncludeCategories:
-  - Regex: '^(<|")(gtest|gmock|isl|json)/'
-    Priority: 4
+  - Regex: '^(<|")(gtest|gmock|isl|json|Eigen)/'
+    Priority: 3
   - Regex: '^(<|")hack.h'
     Priority: 6
   - Regex: "<(sys/|std)[[:alnum:]._]+>"
-    Priority: 5
+    Priority: 4
   - Regex: "<(assert|complex|w?ctype|errno|fenv|float|inttypes|iso646|limits|locale|(tg)?math|setjmp|signal|string|threads|time|[uw]char)\\.h>"
-    Priority: 5
+    Priority: 4
   - Regex: "<[[:alnum:]_]+>"
-    Priority: 5
+    Priority: 4
   - Regex: '(<|")(maze_solver|misc_utils)/'
     Priority: 1
     CaseSensitive: true
@@ -153,7 +153,7 @@ IncludeCategories:
     Priority: 2
     SortPriority: 3
   - Regex: '<.*>'
-    Priority: 3
+    Priority: 5
   - Regex: '.*'
     Priority: 2
 IncludeIsMainRegex: '(_test|Test|UT)?$'

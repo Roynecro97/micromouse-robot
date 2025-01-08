@@ -6,9 +6,16 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
-#include <misc_utils/angle.h>
+#include <maze_solver/maze_samples/small_8x8.h>
 
-#include "sdkconfig.h"
+#include "../hexdump.h"
+
+#include <gtest/gtest.h>
+
+#include <sdkconfig.h>
+
+#include <cstddef>
+#include <cstdint>
 
 #include <driver/gpio.h>
 #include <esp_log.h>
@@ -16,16 +23,16 @@
 #include <freertos/task.h>
 #include <led_strip.h>
 
-#include <gtest/gtest.h>
-
-#include <stdio.h>
-
 #include "hack.h"
 
-LOAD_TEST_FILE(direction_tests);
+LOAD_TEST_FILE(physical_size_tests);
 LOAD_TEST_FILE(strongly_typed_tests);
 LOAD_TEST_FILE(type_utils_tests);
 LOAD_TEST_FILE(value_range_tests);
+
+LOAD_TEST_FILE(cell_tests);
+LOAD_TEST_FILE(direction_tests);
+LOAD_TEST_FILE(maze_tests);
 
 void run_tests()
 {
@@ -35,7 +42,7 @@ void run_tests()
     char *argv[] = {prog_name, color_flag, nullptr};
     ESP_LOGI("googletest", "Running gtest...");
     ::testing::InitGoogleTest(&argc, argv);
-    int retcode = RUN_ALL_TESTS();
+    const int retcode = RUN_ALL_TESTS();
     if (retcode == 0)
     {
         ESP_LOGI("googletest", "All tests passed!");
@@ -44,6 +51,13 @@ void run_tests()
     {
         ESP_LOGE("googletest", "Error in tests (exitcode: %d)", retcode);
     }
+
+    ESP_LOGI("preview", "Running hexdump on a maze multiple times");
+    micromouse::hexdump(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_e(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_w(micromouse::mazes::small_8x8);
+    micromouse::hexdump_log_i(micromouse::mazes::small_8x8);
+    micromouse::HexDumperE{}(micromouse::mazes::small_8x8);
 }
 
 static const char *TAG = "example";
@@ -53,7 +67,7 @@ static const char *TAG = "example";
 */
 inline constexpr auto blink_gpio = static_cast<gpio_num_t>(CONFIG_BLINK_GPIO);
 
-static uint8_t s_led_state = 0;
+static std::uint8_t s_led_state = 0;
 
 #ifdef CONFIG_BLINK_LED_RMT
 
@@ -123,7 +137,7 @@ enum class MorseElement
     WordSep,    // gap between words - '0000000'
 };
 
-constexpr size_t ticks(MorseElement m) noexcept
+constexpr std::size_t ticks(MorseElement m) noexcept
 {
     switch (m)
     {
@@ -142,7 +156,7 @@ constexpr size_t ticks(MorseElement m) noexcept
     return 0;
 }
 
-constexpr uint8_t state(MorseElement m) noexcept
+constexpr std::uint8_t state(MorseElement m) noexcept
 {
     switch (m)
     {
@@ -163,7 +177,7 @@ struct MorseSymbol
 {
     static constexpr auto max_elements = 20UZ;
     MorseElement elements[max_elements];
-    size_t used_elements = 0;
+    std::size_t used_elements = 0;
 
     constexpr auto begin() noexcept { return elements; }
     constexpr auto begin() const noexcept { return elements; }
@@ -186,7 +200,7 @@ struct MorseSymbol
 
     constexpr MorseSymbol() noexcept = default;
 
-    template <size_t N>
+    template <std::size_t N>
         requires (N <= max_elements)
     constexpr MorseSymbol(const MorseElement (&elems)[N]) noexcept : elements{}
                                                                    , used_elements(N)
@@ -197,7 +211,7 @@ struct MorseSymbol
         }
     }
 
-    template <size_t N>
+    template <std::size_t N>
         requires (N * 2 <= max_elements)
     static constexpr MorseSymbol from_elements(const MorseElement (&elems)[N], bool word_end = false) noexcept
     {

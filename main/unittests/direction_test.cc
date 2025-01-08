@@ -2,7 +2,7 @@
 
 #include <misc_utils/angle.h>
 
-#include "direction_utils.h"
+#include "enum_adapters.h"
 
 #include <gtest/gtest.h>
 

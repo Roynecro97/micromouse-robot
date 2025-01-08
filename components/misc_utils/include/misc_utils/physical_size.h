@@ -259,28 +259,29 @@ public:
     }
 
     constexpr rep count() const noexcept { return value; }
-    static constexpr auto zero() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::zero()); }
-    static constexpr auto one() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::one()); }
-    static constexpr auto min() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::min()); }
-    static constexpr auto max() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::max()); }
 
-    constexpr std::chrono::duration<rep, ratio> to_duration() noexcept
+    constexpr std::chrono::duration<rep, ratio> to_duration() const noexcept
         requires (units_equal_v<units, make_units<Time>>)
     {
         return std::chrono::duration<rep, ratio>(count());
     }
 
-    constexpr operator rep() noexcept
+    constexpr operator rep() const noexcept
         requires (units_equal_v<units, make_units<>> && std::ratio_equal_v<ratio, std::ratio<1>>)
     {
         return count();
     }
 
-    explicit constexpr operator rep() noexcept
+    explicit constexpr operator rep() const noexcept
         requires (units_equal_v<units, make_units<>> && !std::ratio_equal_v<ratio, std::ratio<1>>)
     {
         return count() * ratio::num / ratio::den;
     }
+
+    static constexpr auto zero() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::zero()); }
+    static constexpr auto one() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::one()); }
+    static constexpr auto min() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::min()); }
+    static constexpr auto max() noexcept { return PhysicalSize(PhysicalSizeValues<rep>::max()); }
 
 private:
     rep value{};
