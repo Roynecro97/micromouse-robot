@@ -104,6 +104,7 @@ void halt_if_input(OnHalt<F1> on_halt, OnResume<F2> on_resume, Verbosity verbose
 {
     if (detail::read_char(verbose_level))
     {
+        on_halt();
         auto now = detail::now();
         while (detail::now() - now < detail::grace_period)
         {
@@ -113,10 +114,15 @@ void halt_if_input(OnHalt<F1> on_halt, OnResume<F2> on_resume, Verbosity verbose
                 vTaskDelay(1);
             }
         }
-        on_halt();
         halt();
         on_resume();
     }
+}
+
+template <Action F1, Action F2>
+void halt_if_input(OnResume<F1> on_resume, OnHalt<F2> on_halt, Verbosity verbose_level = Verbosity::Normal) noexcept
+{
+    halt_if_input(on_halt, on_resume, verbose_level);
 }
 
 template <Action F>
