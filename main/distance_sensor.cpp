@@ -149,14 +149,15 @@ std::pair<DistanceSensors::Measurements, DistanceSensors::Jacobian> DistanceSens
         const auto wall_coefficients = wall.line().coeffs();
         const auto A = wall_coefficients.x();
         const auto B = wall_coefficients.y();
+        const auto C = wall_coefficients.z();
         const auto theta = pos.theta + sensor_angles[i];
         const auto denominator = A * std::cos(theta) + B * std::sin(theta);
 
         error(i) = (measured - distance).count();
         jacobian(i, 0) = -A / denominator;  // Partial derivative w.r.t. x
         jacobian(i, 1) = -B / denominator;  // Partial derivative w.r.t. y
-        // jacobian(i, 2) = 0;  // Orientation does not directly affect range measurement
-        jacobian(i, 2) = (A * std::sin(theta) - B * std::cos(theta)) / denominator;  // Partial derivative w.r.t. theta
+        jacobian(i, 2) = (A * pos.x->count() + B * pos.y->count() + C) * (B * std::cos(theta) - A * std::sin(theta))
+                       / std::pow(denominator, 2);  // Partial derivative w.r.t. theta
     }
 
     return std::pair(error, jacobian);
