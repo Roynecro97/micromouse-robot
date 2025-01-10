@@ -1,445 +1,407 @@
-/* Blink Example
+#include <misc_utils/physical_size.h>
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
+#include "algorithm_api_mock.h"
+#include "debug_utils.h"
+#include "distance_sensor.h"
+#include "kalman_filter.h"
+#include "motion_model.h"
+#include "motor.h"
+#include "periodic_caller.h"
+#include "pid_controller.h"
+#include "temp_map.h"
+#include <sdkconfig.h>
 
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-#include "sdkconfig.h"
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <numbers>
+#include <ratio>
 
-#include <driver/gpio.h>
-#include <esp_log.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <led_strip.h>
+#include <Arduino.h>
+#include <SparkFun_I2C_Mux_Arduino_Library.h>
+#include <SparkFun_VL53L1X.h>
+#include <Wire.h>
 
-#include <stdio.h>
+using namespace micromouse;
+using namespace std::chrono_literals;
 
-static const char *TAG = "example";
+static constexpr std::chrono::duration<float, std::micro> pid_loop_period{CONFIG_PID_LOOP_PERIOD};
 
-/* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
-   or you can edit the following line and set a number here.
-*/
-inline constexpr auto blink_gpio = static_cast<gpio_num_t>(CONFIG_BLINK_GPIO);
+using MotorSpeed = ConstrainedValue<ValueRange<float, -Motor::max_speed, Motor::max_speed, Mode::Closed>, false>;
+using PhysicalMotorSpeed = PhysicalSize<MotorSpeed, meters_per_second::units>;
 
-static uint8_t s_led_state = 0;
-
-#ifdef CONFIG_BLINK_LED_RMT
-
-static led_strip_handle_t led_strip;
-
-static void blink_led(void)
+template <PhysicalSizeType T>
+static T abs(const T &val) noexcept
 {
-    /* If the addressable LED is enabled */
-    if (s_led_state)
+    return T{std::abs(val.count())};
+}
+
+static constexpr auto is_vertical(Direction d) noexcept
+{
+    return d == Direction::North || d == Direction::South;
+}
+
+/**
+ * @brief Finds the closest direction to the given angle by dividing the plane into quarters.
+ *
+ * @param angle angle to check.
+ * @return Closest direction.
+ */
+static auto to_closest_direction(const Angle &angle) noexcept
+{
+    if (std::abs(angle) < std::numbers::pi_v<float> / 4)
     {
-        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 16, 16, 16);
-        /* Refresh the strip to send data */
-        led_strip_refresh(led_strip);
+        return Direction::East;
+    }
+    else if (std::abs(angle) < 3 * std::numbers::pi_v<float> / 4)
+    {
+        return (angle.get() > 0) ? Direction::South : Direction::North;
+    }
+
+    return Direction::West;
+}
+
+struct MotorArgs
+{
+    Motor motor;
+    PidController linear_velocity_distance_pid;
+    PidController angular_velocity_angle_pid;
+    PidController velocity_pid;
+    float distance_linear_Kv;
+    float distance_angular_Kv;
+    float velocity_Kv;
+    float Ks;
+    float output;
+    PhysicalMotorSpeed wanted_velocity;
+    meters_per_second current_velocity;
+};
+
+struct PidArgs
+{
+    MotorArgs left;
+    MotorArgs right;
+    Position target_pos;
+    Position pos;
+    bool sensors_available;
+};
+
+static KalmanFilter kalman_filter;
+
+/**
+ * @brief This function calculates the control signal for each motor.
+ * Using those two equations:
+ * Vw = Kv1 * sqrt(2 * a * |dx|) * sign(dx) + PID(dx)
+ * Vm = Ks + Kv2 * Vw + PID(Vw - Vc)
+ * Where:
+ * Vw - Wanted velocity.
+ * Kv1 - Wanted velocity factor.
+ * a - Maximum motor acceleration.
+ * dx - Distance error (current pos - wanted pos).
+ * Vm - Motor velocity output.
+ * Ks - Static motor velocity (the smallest velocity to drive the motor on ground).
+ * Kv2 - Motor velocity factor.
+ * Vc - Current motor velocity.
+ *
+ * The first equation uses a PID on the distance error we want to drive and adds a feed
+ * forward term which assumes constant acceleration motion (trapezoid motion profile).
+ * The second equation is to close the loop on the velocity value sent to the motor.
+ * It uses a PID on the velocity error and adds a feed forward term of the wanted velocity.
+ *
+ * Using the first equation, we calculate the linear and angular velocities, Vl and Va.
+ * Vl is calculated from the distance error while Va is calculated from the angle error.
+ * The angle error is composed of the error between current and wanted angle and the error between current angle and the
+ * driving direction needed to reach the destination.
+ * The left motor's wanted speed is Vl + Va and the right motor's wanted speed is Vl - Va.
+ * Now we can use the second equation to calculate the velocity of each motor.
+ *
+ * The left and right motors current velocities change the robot's position using the robot's differential drive motion
+ * model.
+ * When new data from the distance sensors arrive, we use a Kalman filter to fuse the data from the sensors and the
+ * predicted position from the motion model to get a new better estimated position.
+ *
+ * @param args A pointer to a `PidArgs` struct.
+ */
+static void pid_loop(void *args) noexcept
+{
+    static auto &distance_sensors = DistanceSensors::get_instance();
+
+    // Initialization:
+    using LinearMotorSpeed = ConstrainedValue<
+        ValueRange<float, MotorSpeed::range_type::low / 16.0f, MotorSpeed::range_type::high / 12.5f, Mode::Closed>,
+        false>;
+    using RotationalMotorSpeed = ConstrainedValue<
+        ValueRange<float, MotorSpeed::range_type::low / 16.0f, MotorSpeed::range_type::high / 16.0f, Mode::Closed>,
+        false>;
+
+    static_assert(
+        MotorSpeed::range_type::contains(LinearMotorSpeed::range_type::low)
+        && MotorSpeed::range_type::contains(LinearMotorSpeed::range_type::high)
+    );
+    static_assert(
+        MotorSpeed::range_type::contains(RotationalMotorSpeed::range_type::low)
+        && MotorSpeed::range_type::contains(RotationalMotorSpeed::range_type::high)
+    );
+    static_assert(
+        MotorSpeed::range_type::contains(LinearMotorSpeed::range_type::low + RotationalMotorSpeed::range_type::low)
+        && MotorSpeed::range_type::contains(LinearMotorSpeed::range_type::high + RotationalMotorSpeed::range_type::high)
+    );
+
+    // Update pos:
+    PidArgs *pid_args = static_cast<PidArgs *>(args);
+    pid_args->left.current_velocity = pid_args->left.motor.get_speed(pid_loop_period);
+    pid_args->right.current_velocity = pid_args->right.motor.get_speed(pid_loop_period);
+    const auto predicted_pos =
+        update_pos(pid_args->pos, pid_args->left.current_velocity, pid_args->right.current_velocity, pid_loop_period);
+    if (pid_args->sensors_available)
+    {
+        pid_args->sensors_available = false;
+        const auto pos_j = pos_jacobian(
+            pid_args->pos,
+            pid_args->left.current_velocity,
+            pid_args->right.current_velocity,
+            pid_loop_period
+        );
+        const auto [distance_sensor_error, distance_sensor_jacobian] =
+            distance_sensors.predict(pid_args->pos, maze_map);
+        // Maybe compensate for the sensors coming later so the reading was in the past...
+        pid_args->pos = kalman_filter(predicted_pos, pos_j, distance_sensor_error, distance_sensor_jacobian);
     }
     else
     {
-        /* Set all LED off to clear all pixels */
-        led_strip_clear(led_strip);
+        pid_args->pos = predicted_pos;
     }
-}
 
-static void configure_led(void)
-{
-    ESP_LOGI(TAG, "Example configured to blink addressable LED!");
-    /* LED strip initialization with the GPIO and pixels number*/
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = blink_gpio,
-        .max_leds = 1,  // at least one LED on board
+    // Calculate error
+    const auto x_err = unit_cast<millimeters>((pid_args->target_pos.x - pid_args->pos.x).get());
+    const auto y_err = unit_cast<millimeters>((pid_args->target_pos.y - pid_args->pos.y).get());
+    const auto dist_sign = std::copysign(
+        1.0f,
+        x_err.count() * std::cos(pid_args->pos.theta) + y_err.count() * std::sin(pid_args->pos.theta)
+    );
+    const auto dist_err = dist_sign * std::sqrt(std::pow(x_err.count(), 2.0f) + std::pow(y_err.count(), 2.0f));
+    const auto direction_err = [&]()
+    {
+        if (dist_err > (50_mm).count())
+        {
+            return static_cast<float>(Angle{std::atan2(y_err.count(), x_err.count())} - pid_args->pos.theta);
+        }
+        else
+        {
+            return 0.0f;  // Ignore direction error when close to the target
+        }
+    }();
+    const auto angle_err = static_cast<float>(pid_args->target_pos.theta - pid_args->pos.theta) + direction_err;
+
+    // Calculate wanted velocity from distance and angle errors:
+    const auto calc_wanted_velocity = [&](PidController &pid, float err, float kv)
+    {
+        // Use PID on the error and add a feed forward term which assumes constant acceleration motion (trapezoid motion
+        // profile).
+        return meters_per_second{
+            std::copysign(kv, err) * std::sqrt(2 * Motor::max_acceleration * std::abs(err)) + pid.calculate_pid(err)
+        };
     };
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1'000 * 1'000,  // 10MHz
+    const auto limit_velocity = [&](float new_velocity, float last_velocity)
+    {
+        static constexpr auto max_accelaration =
+            Motor::max_acceleration * duration_cast<std::chrono::duration<float>>(pid_loop_period).count();
+        return PhysicalMotorSpeed{
+            std::clamp(new_velocity, last_velocity - max_accelaration, last_velocity + max_accelaration)
+        };
     };
-    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
-    /* Set all LED off to clear all pixels */
-    led_strip_clear(led_strip);
+    const auto calc_motor_velocity = [&](MotorArgs &motor, bool left, float dist_err, float angle_err)
+    {
+        const LinearMotorSpeed wanted_linear_velocity{
+            calc_wanted_velocity(motor.linear_velocity_distance_pid, dist_err, motor.distance_linear_Kv).count()
+        };
+        const RotationalMotorSpeed wanted_angular_velocity{
+            calc_wanted_velocity(motor.angular_velocity_angle_pid, angle_err, motor.distance_angular_Kv).count()
+        };
+
+        motor.wanted_velocity = limit_velocity(
+            left ? wanted_linear_velocity.get() + wanted_angular_velocity.get()
+                 : wanted_linear_velocity.get() - wanted_angular_velocity.get(),
+            motor.wanted_velocity.count().get()
+        );
+        return std::copysign(motor.Ks, motor.wanted_velocity.count())
+             + motor.velocity_Kv * motor.wanted_velocity.count()
+             + motor.velocity_pid.calculate_pid(motor.wanted_velocity.count() - motor.current_velocity.count());
+    };
+    const MotorSpeed left_motor_velocity{calc_motor_velocity(pid_args->left, true, dist_err, angle_err)};
+    const MotorSpeed right_motor_velocity{calc_motor_velocity(pid_args->right, false, dist_err, angle_err)};
+
+    // Outputs:
+    pid_args->left.output = Motor::bdc_mcpwm_duty_tick_max * left_motor_velocity / Motor::max_speed;
+    pid_args->right.output = Motor::bdc_mcpwm_duty_tick_max * right_motor_velocity / Motor::max_speed;
+    pid_args->left.motor.set_pwm(pid_args->left.output);
+    pid_args->right.motor.set_pwm(pid_args->right.output);
 }
 
-#elif CONFIG_BLINK_LED_GPIO
-
-static void blink_led(void)
+static void print_log(const PidArgs &args, const std::chrono::milliseconds &cycle_time = 0ms) noexcept
 {
-    /* Set the GPIO level according to the state (LOW or HIGH)*/
-    gpio_set_level(blink_gpio, s_led_state);
+    std::printf(
+        "WPos: [ %g  %g  %g ] Pos: [ %g  %g  %g ] L: Actual = %g Wanted = %g Output = %g R: Actual = %g Wanted = %g "
+        "Output = %g Cycle time: %lld\n",
+        args.target_pos.x->count(),
+        args.target_pos.y->count(),
+        args.target_pos.theta.get(),
+        args.pos.x->count(),
+        args.pos.y->count(),
+        args.pos.theta.get(),
+        args.left.current_velocity.count(),
+        args.left.wanted_velocity.count().get(),
+        args.left.output,
+        args.right.current_velocity.count(),
+        args.right.wanted_velocity.count().get(),
+        args.right.output,
+        cycle_time.count()
+    );
 }
 
-static void configure_led(void)
+static auto now() noexcept
 {
-    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
-    gpio_reset_pin(blink_gpio);
-    /* Set the GPIO as a push/pull output */
-    gpio_set_direction(blink_gpio, GPIO_MODE_OUTPUT);
+    return std::chrono::milliseconds{millis()};
 }
 
-#endif
-
-#if CONFIG_BLINK_PATTERN_MORSE
-
-inline constexpr char text[] = CONFIG_BLINK_PATTERN_MORSE_TEXT;
-
-enum class MorseElement
+// WARNING: if program reaches end of function app_main() the MCU will restart.
+extern "C" void app_main()
 {
-    Dot,        // dot/dit - '1'
-    Dash,       // dash/dah - '111'
-    MarkSep,    // intra-character gap (between dits and dahs within a character) - '0'
-    LetterSep,  // gap between characters - '000'
-    WordSep,    // gap between words - '0000000'
-};
+    initArduino();
 
-constexpr size_t ticks(MorseElement m) noexcept
-{
-    switch (m)
+    static const auto led_pin = GPIO_NUM_13;
+    pinMode(led_pin, OUTPUT);
+    auto led_state = false;
+
+    constexpr int sda_pin = GPIO_NUM_23;
+    constexpr int scl_pin = GPIO_NUM_22;
+    TwoWire i2c(0);
+    i2c.setPins(sda_pin, scl_pin);
+    i2c.begin();
+
+    auto &distance_sensors = DistanceSensors::get_instance();
+    distance_sensors.init(i2c);
+
+    static constexpr float d_kv = 0.014f;
+    static constexpr float d_kp = 0.0005f;
+    static constexpr float d_ki = 0.0f;
+    static constexpr float d_kd = 0.005f;
+
+    static constexpr float a_kv = 0.1f;
+    static constexpr float a_kp = 0.05f;
+    static constexpr float a_ki = 0.0f;
+    static constexpr float a_kd = 0.005f;
+
+    static constexpr float v_kv = 1.0f;
+    static constexpr float v_kp = 3.0f;
+    static constexpr float v_ki = 0.0f;
+    static constexpr float v_kd = 0.25f;
+
+    AlgorithmApi algorithm;
+    const auto start_pos = *algorithm.get_next();
+    auto alg_pos = algorithm.get_next();
+    PidArgs pid_args{
+        .left{
+            .motor{GPIO_NUM_15, GPIO_NUM_32, GPIO_NUM_14, GPIO_NUM_21, LeftMotor, true},
+            .linear_velocity_distance_pid{d_kp, d_ki, d_kd},
+            .angular_velocity_angle_pid{a_kp, a_ki, a_kd},
+            .velocity_pid{v_kp, v_ki, v_kd},
+            .distance_linear_Kv = d_kv,
+            .distance_angular_Kv = a_kv,
+            .velocity_Kv = v_kv,
+            .Ks = 0.71f,
+            .output = 0.0f,
+            .wanted_velocity{},
+            .current_velocity{},
+        },
+        .right{
+            .motor{GPIO_NUM_33, GPIO_NUM_27, GPIO_NUM_12, GPIO_NUM_18, RightMotor, true},
+            .linear_velocity_distance_pid{d_kp, d_ki, d_kd},
+            .angular_velocity_angle_pid{a_kp, a_ki, a_kd},
+            .velocity_pid{v_kp, v_ki, v_kd},
+            .distance_linear_Kv = d_kv,
+            .distance_angular_Kv = a_kv,
+            .velocity_Kv = v_kv,
+            .Ks = 0.71f,
+            .output = 0.0f,
+            .wanted_velocity{},
+            .current_velocity{},
+        },
+        .target_pos{start_pos},
+        .pos{start_pos},
+        .sensors_available = false,
+    };
+
+    // start delay, log setup and sensors warmup:
+    print_log(pid_args);
+    sleep(10);
+    for (auto i = 0; i < DistanceSensors::avg_filter_size; i++)  // warmup
     {
-    case MorseElement::Dot:
-        return 1;
-    case MorseElement::Dash:
-        return 3;
-    case MorseElement::MarkSep:
-        return 1;
-    case MorseElement::LetterSep:
-        return 3;
-    case MorseElement::WordSep:
-        return 7;
+        distance_sensors.read_all();
     }
-
-    return 0;
-}
-
-constexpr uint8_t state(MorseElement m) noexcept
-{
-    switch (m)
-    {
-    case MorseElement::Dot:
-    case MorseElement::Dash:
-        return 1;
-
-    case MorseElement::MarkSep:
-    case MorseElement::LetterSep:
-    case MorseElement::WordSep:
-        return 0;
-    }
-
-    return 0;
-}
-
-struct MorseSymbol
-{
-    static constexpr auto max_elements = 20UZ;
-    MorseElement elements[max_elements];
-    size_t used_elements = 0;
-
-    constexpr auto begin() noexcept { return elements; }
-    constexpr auto begin() const noexcept { return elements; }
-    constexpr auto cbegin() const noexcept { return begin(); }
-
-    constexpr auto end() noexcept { return elements + used_elements; }
-    constexpr auto end() const noexcept { return elements + used_elements; }
-    constexpr auto cend() const noexcept { return end(); }
-
-    constexpr auto size() const noexcept { return used_elements; }
-
-    using value_type = MorseElement;
-    using reference = MorseElement &;
-    using const_reference = const MorseElement &;
-    using pointer = MorseElement *;
-    using const_pointer = const MorseElement *;
-    using iterator = pointer;
-    using const_iterator = const_pointer;
-    using size_type = decltype(MorseSymbol::used_elements);
-
-    constexpr MorseSymbol() noexcept = default;
-
-    template <size_t N>
-        requires (N <= max_elements)
-    constexpr MorseSymbol(const MorseElement (&elems)[N]) noexcept : elements{}
-                                                                   , used_elements(N)
-    {
-        for (auto i = 0ZU; i < N; ++i)
-        {
-            elements[i] = elems[i];
-        }
-    }
-
-    template <size_t N>
-        requires (N * 2 <= max_elements)
-    static constexpr MorseSymbol from_elements(const MorseElement (&elems)[N], bool word_end = false) noexcept
-    {
-        MorseElement expanded[N * 2];
-        for (auto i = 0UZ; i < N; ++i)
-        {
-            const auto ei = i * 2;
-            expanded[ei] = elems[i];
-            expanded[ei + 1] = MorseElement::MarkSep;
-        }
-        expanded[(N * 2) - 1] = word_end ? MorseElement::WordSep : MorseElement::LetterSep;
-        return {expanded};
-    }
-
-    static constexpr MorseSymbol from_char(char c, bool word_end = false) noexcept
-    {
-        // clang-format off
-        switch (c)
-        {
-        case 'a':
-        case 'A':
-            return from_elements({MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'b':
-        case 'B':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 'c':
-        case 'C':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 'd':
-        case 'D':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 'e':
-        case 'E':
-            return from_elements({MorseElement::Dot}, word_end);
-
-        case 'f':
-        case 'F':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 'g':
-        case 'G':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 'h':
-        case 'H':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 'i':
-        case 'I':
-            return from_elements({MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 'j':
-        case 'J':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case 'k':
-        case 'K':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'l':
-        case 'L':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 'm':
-        case 'M':
-            return from_elements({MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case 'n':
-        case 'N':
-            return from_elements({MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 'o':
-        case 'O':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case 'p':
-        case 'P':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 'q':
-        case 'Q':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'r':
-        case 'R':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case 's':
-        case 'S':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case 't':
-        case 'T':
-            return from_elements({MorseElement::Dash}, word_end);
-
-        case 'u':
-        case 'U':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'v':
-        case 'V':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'w':
-        case 'W':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case 'x':
-        case 'X':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case 'y':
-        case 'Y':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case 'z':
-        case 'Z':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '0':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '1':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '2':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '3':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '4':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '5':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '6':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '7':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '8':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '9':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '.':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case ',':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '?':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case '\'':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '!':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash}, word_end);
-
-        case '/':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '(':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case ')':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '&':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case ':':
-            return from_elements({MorseElement::Dash, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot}, word_end);
-
-        case ';':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '=':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '+':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '-':
-            return from_elements({MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '_':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '"':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        case '$':
-            return from_elements({MorseElement::Dot, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot, MorseElement::Dot, MorseElement::Dash}, word_end);
-
-        case '@':
-            return from_elements({MorseElement::Dot, MorseElement::Dash, MorseElement::Dash, MorseElement::Dot, MorseElement::Dash, MorseElement::Dot}, word_end);
-
-        default:
-            return {{MorseElement::MarkSep}};  // PH error
-        }
-        // clang-format on
-    }
-};
-
-constexpr bool is_word_end(char c)
-{
-    switch (c)
-    {
-    case ' ':
-    case '\n':
-    case '\r':
-    case '\t':
-    case '\v':
-    case '\0':
-        return true;
-
-    default:
-        return false;
-    }
-}
-
-[[noreturn]]
-void morse_loop()
-{
-    auto pos = text;
-    static constexpr TickType_t delay = CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS;
-
+    print_log(pid_args);
+
+    static constexpr auto max_diff_distance = 20.0_mm;
+    static constexpr Angle max_diff_angle{std::numbers::pi_v<float> / 60};
+
+    // start PID task
+    pid_args.left.motor.clear_encoder();
+    pid_args.right.motor.clear_encoder();
+    PeriodicCaller pid_caller(pid_loop, static_cast<void *>(&pid_args));
+    pid_caller.start(pid_loop_period);
+
+    static constexpr auto loop_interval = 20ms;
+    static_assert(loop_interval >= 20ms, "loop_interval doesn't match with sensor reading times");
+    // Main loop
     while (true)
     {
-        auto morse = MorseSymbol::from_char(*pos, is_word_end(*(pos + 1)));
-        for (auto elem : morse)
+        const auto cycle_start_time = now();
+        distance_sensors.read_all();
+        pid_args.sensors_available = true;
+        if (alg_pos)
         {
-            s_led_state = state(elem);
-            ESP_LOGI("morse", "Turning the LED %s!", s_led_state ? "ON" : "OFF");
-            blink_led();
-            vTaskDelay(delay * ticks(elem));
+            const auto &next_pos = *alg_pos;
+            pid_args.target_pos = next_pos;
+            const auto x_err = unit_cast<millimeters>((next_pos.x - pid_args.pos.x).get());
+            const auto y_err = unit_cast<millimeters>((next_pos.y - pid_args.pos.y).get());
+            const auto pos_angle_err = next_pos.theta - pid_args.pos.theta;
+            const auto next_direction = to_closest_direction(next_pos.theta);
+            if (std::abs(pos_angle_err.get()) <= max_diff_angle.get()
+                && abs(is_vertical(next_direction) ? y_err : x_err) <= max_diff_distance)
+            {
+                pid_args.pos = next_pos;  // snap
+                alg_pos = algorithm.get_next();
+                led_state = !led_state;
+                digitalWrite(led_pin, led_state);
+            }
+        }
+        else
+        {
+            pid_caller.stop();
+            pid_args.left.motor.set_pwm(0.0f);
+            pid_args.right.motor.set_pwm(0.0f);
         }
 
-        // Next char, infinite cycle
-        if (*++pos == '\0')
+        debug_utils::halt_if_input(
+            debug_utils::OnHalt(
+                [&]
+                {
+                    pid_caller.stop();
+                    pid_args.left.motor.set_pwm(0.0f);
+                    pid_args.right.motor.set_pwm(0.0f);
+                }
+            ),
+            debug_utils::OnResume([&] { pid_caller.start(pid_loop_period); }),
+            debug_utils::Verbosity::Silent
+        );
+
+        // keep loop time at least loop_interval.
+        while (now() - cycle_start_time < loop_interval)
         {
-            pos = text;
+            delay(1);
         }
-    }
-}
-#endif
 
-extern "C" void app_main(void)
-{
-    /* Configure the peripheral according to the LED type */
-    configure_led();
-
-#if CONFIG_BLINK_PATTERN_MORSE
-    morse_loop();
-#else
-    while (true)
-    {
-        ESP_LOGI(TAG, "Turning the LED %s!", s_led_state ? "ON" : "OFF");
-        blink_led();
-        /* Toggle the LED state */
-        s_led_state = !s_led_state;
-        vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
+        print_log(pid_args, now() - cycle_start_time);
     }
-#endif
 }
