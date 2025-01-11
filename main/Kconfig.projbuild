@@ -52,4 +52,11 @@ menu "Micromouse Configuration"
         help
             Select running mode.
 
+    config PID_LOOP_PERIOD
+        int "PID loop period in µs"
+        range 1000 20000
+        default 5000
+        help
+            Define the PID loop period in microseconds.
+
 endmenu

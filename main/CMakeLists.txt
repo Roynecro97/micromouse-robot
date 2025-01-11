@@ -53,8 +53,15 @@ elseif(MICROMOUSE_MORSE_MODE)
 else()
   idf_component_register(
     SRCS
+      distance_sensor.cpp
+      kalman_filter.cpp
       main.cpp
+      motion_model.cpp
+      motor.cpp
+      periodic_caller.cpp
+      pid_controller.cpp
+      segment.cpp
     INCLUDE_DIRS
-      .
+      ../managed_components/espressif__eigen/eigen
   )
 endif()
