@@ -129,7 +129,7 @@ static void pid_loop(void *args) noexcept
 
     // Initialization:
     using LinearMotorSpeed = ConstrainedValue<
-        ValueRange<float, MotorSpeed::range_type::low / 16.0f, MotorSpeed::range_type::high / 12.5f, Mode::Closed>,
+        ValueRange<float, MotorSpeed::range_type::low / 12.0f, MotorSpeed::range_type::high / 12.0f, Mode::Closed>,
         false>;
     using RotationalMotorSpeed = ConstrainedValue<
         ValueRange<float, MotorSpeed::range_type::low / 16.0f, MotorSpeed::range_type::high / 16.0f, Mode::Closed>,
